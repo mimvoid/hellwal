@@ -1,7 +1,12 @@
-CFLAGS = -ggdb -Wall -Wextra -lm -O3
+CFLAGS = -Wall -Wextra -lm -O3
 
 hellwal: hellwal.c
 	$(CC) $(CFLAGS) hellwal.c -o hellwal
 
+debug: hellwal.c
+	$(CC) $(CFLAGS) -ggdb hellwal.c -o hellwal 
+
 clean:
-	rm hellwal colors.pallette
+	rm hellwal
+
+.PHONY: hellwal
