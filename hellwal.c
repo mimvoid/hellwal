@@ -1,19 +1,30 @@
 /* Inspiration - https://github.com/dylanaraps/pywal */
 /* Example of using RGB COLORS in terminal - https://chrisyeh96.github.io/2020/03/28/terminal-colors.html */
 
-/* [x]TODO: gen. colors    */
-/* [ ]TODO: templating     */
-/* [ ]TODO: parsing        */
-/* [ ]TODO: config         */
-/* [ ]TODO: program usage  */
+/* [ ]TODO: config                      */
+/* [ ]TODO: print proper program usage  */
+/* [x]TODO: gen. colors                 */
+/* [x]TODO: templating                  */
+/* [x]TODO: parsing                     */
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <strings.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+#define HELL_PARSER_IMPLEMENTATION
+#include "hell_parser.h"
+
+#define HELL_COL(p) p->input + p->pos + 1
+
+char HELLWAL_DELIM = '%';
+char HELLWAL_DELIM_COUNT = 2;
+
 
 /***
  * STRUCTURES
@@ -43,6 +54,27 @@ typedef struct
     RGB colors[16];
 } PALETTE;
 
+
+/*** 
+ * FUNCTIONS DECLARATIONS
+ ***/
+void hellwal_usage();
+void err(const char *format, ...);
+
+void set_term_colors(PALETTE pal);
+
+PALETTE gen_palette(IMG *img);
+void pallette_print(PALETTE pal);
+void pallette_write(char *filename, PALETTE pal);
+char *pallette_color(PALETTE pal, unsigned c, char *fmt);
+
+IMG *img_load(char *filename);
+void img_free(IMG *img);
+
+char *load_text_file(char *filename);
+char *process_template(char *template_name, PALETTE pal);
+
+
 /*** 
  * FUNCTIONS DECLARATIONS
  ***/
@@ -51,7 +83,7 @@ typedef struct
 void hellwal_usage()
 {
     printf("\nUsage:");
-    printf("\t./hellwal ./File_path\n");
+    printf("\t./hellwal [image_path] [template]\n");
 }
 
 /* prints error as formatted output and exits with EXIT_FAILURE */
@@ -101,14 +133,29 @@ void pallette_print(PALETTE pal)
     printf("\n");
 }
 
-/* Write pallette to a file */
+/* Write color pallette to buffer */
+char *pallette_color(PALETTE pal, unsigned c, char *fmt)
+{
+    if (c > 15)
+        return NULL;
+
+    char *buffer = (char*)malloc(64);
+    sprintf(buffer, fmt, pal.colors[c].R, pal.colors[c].G, pal.colors[c].B);
+
+    return buffer;
+}
+
+/* Write pallette to file */
 void pallette_write(char *filename, PALETTE pal)
 {
     FILE *file = fopen(filename, "w");
+
+    if (file == NULL) err("Failed to open file");
+
     for (unsigned i=0; i<16; i++)
     {
         if (i == 7) printf("\n");
-        fprintf(file, "color%u=\"%02x%02x%02x\"\n", i, pal.colors[i].R, pal.colors[i].G, pal.colors[i].B);
+        fprintf(file, "color%u=%s\n", i, pallette_color(pal, i, "%02x%02x%02x"));
     }
     fclose(file);
 }
@@ -149,14 +196,138 @@ void set_term_colors(PALETTE pal)
     }
 }
 
+/* Loads text file, returns buffer if succeded, if not returns NULL */
+char *load_text_file(char *filename)
+{
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) err("Failed to open file: %s", filename);
+
+    fseek(file, 0, SEEK_END);
+    int size = ftell(file);
+    rewind(file);
+
+    char *buffer = (char*)malloc(size + 1); // +1 for null terminator
+    if (buffer == NULL)
+    {
+        printf("Failed to allocate memory for file buffer");
+        fclose(file);
+        return NULL;
+    }
+
+    fread(buffer, 1, size, file);
+    buffer[size] = '\0';
+
+    fclose(file);
+
+    return buffer;
+}
+
+/* 
+ * loads template_name file content
+ * and replaces content between delim with colors,
+ * returns buffer of entire file
+ */
+char *process_template(char *template_name, PALETTE pal)
+{
+    char *template_buffer = NULL;
+    size_t template_size = 0;
+    int last_pos = 0;
+    int buffrd_pos = 0;
+    
+    hell_parser_t *p = hell_parser_create(load_text_file(template_name));
+    template_buffer = calloc(1, 1);
+    
+    while (!hell_parser_eof(p))
+    {
+        char ch;
+        if (hell_parser_next(p, &ch) == HELL_PARSER_OK)
+        {
+            if (ch == HELLWAL_DELIM)
+            {
+                p->pos -= 1;  
+                char *delim_buf = NULL;
+
+                last_pos = p->pos + 1;
+
+                if (hell_parser_delim(p, HELLWAL_DELIM, HELLWAL_DELIM_COUNT, &delim_buf) == HELL_PARSER_OK)
+                {
+                    assert(p->pos - last_pos > 0);
+                    
+                    int size_before_delim = last_pos - buffrd_pos - 1;
+                    if (size_before_delim > 0)
+                    {
+                        template_size += size_before_delim + 1;
+                        template_buffer = realloc(template_buffer, template_size);
+                        strncat(template_buffer, p->input + buffrd_pos, size_before_delim);
+                    }
+
+                    hell_parser_t *pn = hell_parser_create(delim_buf);
+                    char *number = NULL;
+
+                    if (hell_parser_delim(pn, '|', 1, &number) == HELL_PARSER_OK)
+                    {
+                        assert(number != NULL);
+
+                        if (pn->pos + 1 < pn->length)
+                        {
+                            if (!strcmp(HELL_COL(pn), "hex"))
+                            {
+                                const char *color = pallette_color(pal, atoi(number), "%02x%02x%02x");
+                                size_t color_len = strlen(color);
+
+                                template_size += color_len + 1;
+                                template_buffer = realloc(template_buffer, template_size);
+                                strcat(template_buffer, color);
+                            }
+                            if (!strcmp(HELL_COL(pn), "rgb"))
+                            {
+                                const char *color = pallette_color(pal, atoi(number), "rgb(%d, %d, %d)");
+                                size_t color_len = strlen(color);
+
+                                template_size += color_len + 1;
+                                template_buffer = realloc(template_buffer, template_size);
+                                strcat(template_buffer, color);
+                            }
+                        }
+                    }
+                    /* Update last read buffer position */
+                    buffrd_pos = p->pos;
+
+                    free(delim_buf);
+                    free(number);
+                    hell_parser_destroy(pn);
+                }
+            }
+        }
+    }
+
+    /* 
+     * If content of template does not end on delim,
+     * add rest of the content
+     */
+    if ((size_t)buffrd_pos < p->length)
+    {
+        size_t size = p->length - buffrd_pos;
+        template_size += size + 1;
+        template_buffer = realloc(template_buffer, template_size);
+        strncat(template_buffer, p->input + buffrd_pos, size);
+    }
+
+    hell_parser_destroy(p);
+
+    printf("%s:\n%s\n", template_name, template_buffer);
+    return template_buffer;
+}
+
 /***
  * MAIN
  ***/
 int main(int argc, char **argv)
 {
-    if (argc < 2)
+    if (argc < 3)
     {
-        err("You should provide an argument!\n");
+        hellwal_usage();
+        err("You should provide an arguments! \n");
         return 1;
     }
 
@@ -165,8 +336,8 @@ int main(int argc, char **argv)
     img_free(img);
 
     pallette_print(pal);
-    pallette_write("colors", pal);
     set_term_colors(pal);
 
-    return 0;
+    // TODO: read templates from config templates folder and cmdline args
+    process_template(argv[2], pal);
 }
