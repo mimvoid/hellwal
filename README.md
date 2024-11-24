@@ -43,9 +43,11 @@ Options:
   ``--image``,           ``-i <image>``     - Set the image file.
 
   ``--template-folder``, ``-f <folder>``    - Set the template folder.
+
   ``--output``,          ``-o <output>``    - Set the output folder for generated templates
 
   ``--template``,        ``-t <template>``  - Set the template file.
+
   ``--output-name``,     ``-n <output>``    - Set the output name for single one, specified generated template
 
   ``--help``,            ``-h``             - Display help and exit.
