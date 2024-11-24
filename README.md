@@ -31,26 +31,38 @@ color15='%%color|15|.hex%%'
 You can set specific color by writing number a from 0 to 15 between `|` character, and specify output format by writing it after `.` (eg. `.hex` in `colors|0|.hex')`
 
 ## Available color formats:
--[ ] ``hex`` | ``ebcb96``
--[ ] ``rgb`` | ``rgb(r, g, b)``
+- [x] ``hex`` | ``ebcb96``
+- [x] ``rgb`` | ``rgb(r, g, b)``
 
 
-``hellwal --help``
+## hellwal --help
 
 Usage:
 	./hellwal [OPTIONS]
 Options:
- - Set the image file.                                              ``--image                -i <image>``     
-                                                                    
- - Set the template folder.                                         ``--template-folder      -f <folder>``    
-                                                                    
- - Set the output folder for generated templates                    ``--output               -o <output>``    
-                                                                    
- - Set the template file.                                           ``--template             -t <template>``  
-                                                                    
- - Set the output name for single one, specified generated template ``--output-name          -n <output>``    
-                                                                    
- - Display help and exit.                                           ``--help                 -h               
+- Set **image file**
+	- --image \<image\>
+	- -i \<image\>
+
+- Set the **template folder**
+	- --template-folder \<folder\>
+	- -f \<folder\>
+
+- Set the **output folder** for **generated templates**
+	- --output \<output\>
+	- -o \<output\>
+
+- Set the **template file**
+	- --template <template\>
+	- -t \<template\>
+
+- Set the **output name** for a **single**, specified generated **template**
+	- --output-name \<output\>
+	- -n \<output\>
+
+- Display **help** and exit
+	- --help
+	- -h
 
 # Special thanks:
 - [dylanaraps](https://github.com/dylanaraps) - for [https://github.com/dylanaraps/pywal](pywal) and other amazing stuff he created.
