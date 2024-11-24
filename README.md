@@ -40,17 +40,17 @@ You can set specific color by writing number a from 0 to 15 between `|` characte
 Usage:
 	./hellwal [OPTIONS]
 Options:
-  ``--image``,           ``-i <image>``     - Set the image file.
-
-  ``--template-folder``, ``-f <folder>``    - Set the template folder.
-
-  ``--output``,          ``-o <output>``    - Set the output folder for generated templates
-
-  ``--template``,        ``-t <template>``  - Set the template file.
-
-  ``--output-name``,     ``-n <output>``    - Set the output name for single one, specified generated template
-
-  ``--help``,            ``-h``             - Display help and exit.
+ - Set the image file.                                              ``--image                -i <image>``     
+                                                                    
+ - Set the template folder.                                         ``--template-folder      -f <folder>``    
+                                                                    
+ - Set the output folder for generated templates                    ``--output               -o <output>``    
+                                                                    
+ - Set the template file.                                           ``--template             -t <template>``  
+                                                                    
+ - Set the output name for single one, specified generated template ``--output-name          -n <output>``    
+                                                                    
+ - Display help and exit.                                           ``--help                 -h               
 
 # Special thanks:
 - [dylanaraps](https://github.com/dylanaraps) - for [https://github.com/dylanaraps/pywal](pywal) and other amazing stuff he created.
