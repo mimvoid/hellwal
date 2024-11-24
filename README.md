@@ -1,13 +1,13 @@
 # hellwal - fast, extensible colorscheme generator
 
-[ ] todo: config                            
-[ ] todo: do more pleasant color schemes    
-[ ] todo: tweaking options for color palette
---------------------------------------------
-[x] todo: print proper program usage        
-[x] todo: gen. colors                       
-[x] todo: templating                        
-[x] todo: parsing                           
+- [❌] TODO: config                            
+- [❌] TODO: do more pleasant color schemes    
+- [❌] TODO: tweaking options for color palette
+----------------------------------------------
+- [✅] TODO: print proper program usage        
+- [✅] TODO: gen. colors                       
+- [✅] TODO: templating                        
+- [✅] TODO: parsing                           
 
 # How to use?
 
@@ -31,8 +31,8 @@ color15='%%color|15|.hex%%'
 You can set specific color by writing number a from 0 to 15 between `|` character, and specify output format by writing it after `.` (eg. `.hex` in `colors|0|.hex')`
 
 ## Available color formats:
-- ``hex`` | ``ebcb96``
-- ``rgb`` | ``rgb(r, g, b)``
+-[✅] ``hex`` | ``ebcb96``
+-[✅] ``rgb`` | ``rgb(r, g, b)``
 
 
 ``hellwal --help``
