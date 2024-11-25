@@ -1,14 +1,24 @@
-/*  hellwal - v0.0.1 - MIT LICENSE
+/*  hellwal - v0.0.2 - MIT LICENSE
  *
- *  [ ] todo: config                            
- *  [ ] todo: do more pleasant color schemes    
- *  [ ] todo: tweaking options for color palette
- *  --------------------------------------------
- *  [x] todo: print proper program usage        
- *  [x] todo: gen. colors                       
- *  [x] todo: templating                        
- *  [x] todo: parsing                           
+ *  [ ] TODO: config ( is it really needed? )                      
+ *  [ ] TODO: tweaking options for generated colors                
+ *  [ ] TODO: support for other OS's like Mac or Win               
+ *  [ ] TODO: support for already built themes (like gruvbox etc.) 
+ *  ---------------------------------------------------------------
+ *  [x] TODO: do more pleasant color schemes                       
+ *  [x] TODO: print proper program usage                           
+ *  [x] TODO: gen. colors                                          
+ *  [x] TODO: templating                                           
+ *  [x] TODO: parsing                                              
+ *
+ *  changelog v0.0.2:
+ *   - actually working and better generated colorschemes
+ *   - silent output: -q or --quiet
+ *   - variable |w|, that recognized in templates returns IMAGE_ARG path
+ *   - support for both light/dark mode
+ *   - added more example templates
  */
+
 
 #include <glob.h>
 #include <fcntl.h>
@@ -26,10 +36,77 @@
 #define HELL_PARSER_IMPLEMENTATION
 #include "hell_parser.h"
 
+
 /***
  * MACROS
  ***/
+
+/* it tells bounds of valid rgb values */
+#define MIN_BRIGHTNESS 50
+#define MAX_BRIGHTNESS 200
+
+/* just palette size */
+#define PALETTE_SIZE 16
+
+/* fmt macro for color */
 #define HELL_COL(p) p->input + p->pos + 1
+
+
+/***
+ * STRUCTURES
+ ***/
+
+
+/* IMG
+ * 
+ * image structure that contains all image data,
+ * we need to create color palette
+ */
+typedef struct
+{
+    /* With 3 channels it goes from 0 -> size:
+     * pixels[0] = Red;
+     * pixels[1] = Green;
+     * pixels[2] = Blue;
+     * pixels[3] = Red;
+     * .. And so on
+     *
+     * Also, we are using uint8_t instead of RGB structure
+     * here, only because I dont know how to do it.
+     */
+    uint8_t *pixels; 
+    size_t size; /* Size is width * height * channels(3) */
+
+    unsigned width;
+    unsigned height;
+} IMG;
+
+/* RGB,
+ * what can I say huh */
+typedef struct
+{
+    uint8_t R;
+    uint8_t G;
+    uint8_t B;
+} RGB;
+
+/* PALETTE
+ *
+ * stores all RGB colors */
+typedef struct
+{
+    RGB colors[PALETTE_SIZE];
+} PALETTE;
+
+/* TEMPLATE
+ *
+ * helps read and write and store processed buffer*/
+typedef struct
+{
+    char *name;
+    char *path;
+    char *content;
+} TEMPLATE;
 
 
 /***
@@ -42,6 +119,15 @@ char HELLWAL_DELIM_COUNT = 2;
 
 /* image path, which will be used to create PALETTE */
 char *IMAGE_ARG =  NULL;
+
+/* quiet arg, if NULL you will get verbose output,
+ * otherwise its going to print everthing normally 
+ */
+char *QUIET_ARG = NULL;
+
+/* darkmode or lightmode, darkmode is default */
+char *DARK_ARG  = NULL;
+char *LIGHT_ARG = NULL;
 
 /* folder, contains templates where colors will be placed */
 char *TEMPLATE_FOLDER_ARG =  NULL;
@@ -65,73 +151,58 @@ char *TEMPLATE_ARG =  NULL;
  */
 char *OUTPUT_NAME_ARG = NULL;
 
-
-/***
- * STRUCTURES
- ***/
-
-typedef struct
-{
-    /* With 3 channels it goes from 0 -> size:
-     * pixels[0] = Red;
-     * pixels[1] = Green;
-     * pixels[2] = Blue;
-     * pixels[3] = Red;
-     * .. And so on
-     *
-     * Also, we are using uint8_t instead of RGB structure
-     * here, only because I dont know how to do it.
-     */
-    uint8_t *pixels; 
-    size_t size; /* Size is width * height * channels(3) */
-
-    unsigned width;
-    unsigned height;
-} IMG;
-
-typedef struct
-{
-    uint8_t R;
-    uint8_t G;
-    uint8_t B;
-} RGB;
-
-typedef struct
-{
-    RGB colors[16];
-} PALETTE;
-
-typedef struct
-{
-    char *name;
-    char *path;
-    char *content;
-} TEMPLATE;
+/* one palette as global variable, so log_c() can access colors */
+size_t pal_log_iter = 1;
+PALETTE pal_log = {
+    .colors[1].R = 255,
+    .colors[1].G = 69,
+    .colors[1].B = 255
+ };
 
 
 /*** 
  * FUNCTIONS DECLARATIONS
  ***/
+
+/* args */
 int set_args(int argc, char *argv[]);
+
+/* utils */
+void check_output_dir(char *path);
+void hellwal_usage(const char *name);
 char* home_full_path(const char* path);
 
-void check_output_dir(char *path);
-void set_term_colors(PALETTE pal);
+/* logging */
 void err(const char *format, ...);
 void warn(const char *format, ...);
-void hellwal_usage(const char *name);
+void log_c(const char *format, ...);
 
-
+/* IMG */
 IMG *img_load(char *filename);
 void img_free(IMG *img);
 
-PALETTE gen_palette(IMG *img);
-void palette_print(PALETTE pal);
-char *palette_color(PALETTE pal, unsigned c, char *fmt);
+/* RGB */
+float calculate_color_distance(RGB a, RGB b);
+int is_valid_luminance(float luminance);
+int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
+RGB darken_color(RGB color, float factor);
+RGB lighten_color(RGB color, float factor);
+RGB saturate_color(RGB color, float factor);
 
-void process_templating(PALETTE pal);
+/* palettes */
+PALETTE gen_palette(IMG *img);
+float calculate_luminance(RGB c);
+int compare_luminance(const void *a, const void *b);
+char *palette_color(PALETTE pal, unsigned c, char *fmt);
+void palette_print(PALETTE pal);
+void set_term_colors(PALETTE pal);
+void reverse_palette(PALETTE *palette);
+void sort_palette_by_luminance(PALETTE *palette);
+
+/* templates */
+size_t process_templating(PALETTE pal);
 char *load_template_file(char *filename);
-void template_write(TEMPLATE *t, char *dir);
+size_t template_write(TEMPLATE *t, char *dir);
 void process_template(TEMPLATE *t, PALETTE pal);
 TEMPLATE **get_templates(const char *dir_path, size_t *_size);
 
@@ -146,6 +217,10 @@ void hellwal_usage(const char *name)
     printf("Usage:\n\t%s [OPTIONS]\n", name);
     printf("Options:\n");
     printf("  --image,           -i <image>     Set the image file.\n\n");
+    printf("  --dark,            -d             Set dark mode (on by default)\n");
+    printf("  --light,           -l             Set light mode\n\n");
+
+    printf("  --quiet,           -q             Set silent output\n\n");
 
     printf("  --template-folder, -f <folder>    Set the template folder.\n");
     printf("  --output,          -o <output>    Set the output folder for generated templates\n\n");
@@ -157,6 +232,9 @@ void hellwal_usage(const char *name)
 
     printf("\n\nDetailed: \n");
     printf("  --image: image path, which will be used to create color palette\n\n");
+    printf("  --dark: colors go brrrr (#000000)\n\n");
+    printf("  --light: colors go ffffff (#ffffff)\n\n");
+    printf("  --quiet: \n\n"); /* XD */
 
     printf("  --template-folder: folder which contains templates to process\n \
             to generate colors ; default one is ~/.config/hellwal/templates \n\n");
@@ -215,6 +293,21 @@ int set_args(int argc, char *argv[])
             {
                 argc = -1;
             }
+        }
+        else if ((strcmp(argv[i], "--quiet") == 0 || strcmp(argv[i], "-q") == 0))
+        {
+            /* anything other than NULL, makes quiet/silent output */
+            QUIET_ARG = "";
+        }
+        else if ((strcmp(argv[i], "--dark") == 0 || strcmp(argv[i], "-d") == 0))
+        {
+            /* anything other than NULL, makes dark mode */
+            DARK_ARG = "";
+        }
+        else if ((strcmp(argv[i], "--light") == 0 || strcmp(argv[i], "-l") == 0))
+        {
+            /* anything other than NULL, makes light mode */
+            LIGHT_ARG = "";
         }
         else if ((strcmp(argv[i], "--output-folder") == 0 || strcmp(argv[i], "-o") == 0))
         {
@@ -297,6 +390,38 @@ void warn(const char *format, ...)
     fprintf(stderr, "\n");
 }
 
+/* prints formatted output to stdout with colors */
+void log_c(const char *format, ...)
+{
+    if (QUIET_ARG != NULL)
+        return;
+
+    unsigned idx = 0;
+
+    if (pal_log_iter > PALETTE_SIZE - 4)
+        pal_log_iter = 4;
+    if (pal_log_iter == 1)
+        idx = pal_log_iter ;
+    else
+        idx = pal_log_iter;
+
+    va_list ap;
+    va_start(ap, format);
+
+    fprintf(stdout, "\033[38;2;%d;%d;%dm[INFO]: ",
+            pal_log.colors[idx].R,
+            pal_log.colors[idx].G,
+            pal_log.colors[idx].B);
+
+    vfprintf(stdout, format, ap);
+    fprintf(stdout, "\033[0m");
+
+    va_end(ap);
+    fprintf(stdout, "\n");
+    pal_log_iter+=2;
+}
+
+
 /* get full path from '~/' or other relative paths */
 char* home_full_path(const char* path)
 {
@@ -327,36 +452,159 @@ void check_output_dir(char *path)
         mkdir(path, 0700);
 }
 
-/* Generates PALETTE structure from given image */
+/* calculate how bright is color */
+float calculate_luminance(RGB c) {
+    return (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B); 
+}
+
+/* check if luminance is within a valid range  */
+int is_valid_luminance(float luminance) {
+    return luminance >= MIN_BRIGHTNESS && luminance <= MAX_BRIGHTNESS;
+}
+
+/* check Euclidean distance between two colors to ensure diversity */
+float calculate_color_distance(RGB a, RGB b) {
+    return sqrtf(powf(a.R - b.R, 2) + powf(a.G - b.G, 2) + powf(a.B - b.B, 2));
+}
+
+/* ensure that new color is not too similar to existing colors in the palette */
+int is_color_too_similar(RGB *palette, int num_colors, RGB new_color) {
+    for (int i = 0; i < num_colors; i++) {
+        if (calculate_color_distance(palette[i], new_color) < 30)
+            return 1;  // Color is too similar
+    }
+    return 0;
+}
+
+/* sort palette by luminance to spread out colors */
+void sort_palette_by_luminance(PALETTE *palette) {
+    qsort(palette->colors, PALETTE_SIZE, sizeof(RGB), compare_luminance);
+}
+
+/* compare two RGB colors */
+int compare_luminance(const void *a, const void *b) {
+    RGB *color_a = (RGB *)a;
+    RGB *color_b = (RGB *)b;
+
+    float lum_a = calculate_luminance(*color_a);
+    float lum_b = calculate_luminance(*color_b);
+
+    if (lum_a < lum_b)
+        return -1;
+    else if (lum_a > lum_b)
+        return 1;
+    else
+        return 0;
+}
+
+/* darken a color */
+RGB darken_color(RGB color, float factor) {
+    color.R = (uint8_t)(color.R * factor);
+    color.G = (uint8_t)(color.G * factor);
+    color.B = (uint8_t)(color.B * factor);
+    return color;
+}
+
+/* lighten a color */
+RGB lighten_color(RGB color, float factor) {
+    color.R = (uint8_t)(255 - ((255 - color.R) * factor));
+    color.G = (uint8_t)(255 - ((255 - color.G) * factor));
+    color.B = (uint8_t)(255 - ((255 - color.B) * factor));
+    return color;
+}
+
+/* saturate a color */
+RGB saturate_color(RGB color, float factor) {
+    float max_val = fmaxf(color.R, fmaxf(color.G, color.B));
+    color.R = (uint8_t)(color.R + (max_val - color.R) * factor);
+    color.G = (uint8_t)(color.G + (max_val - color.G) * factor);
+    color.B = (uint8_t)(color.B + (max_val - color.B) * factor);
+    return color;
+}
+
+
+/* function to reverse the palette, used when light mode is specified */
+void reverse_palette(PALETTE *palette)
+{
+    for (int i = 0; i < PALETTE_SIZE / 2; i++)
+    {
+        RGB temp = palette->colors[i];
+
+        palette->colors[i] = palette->colors[PALETTE_SIZE - 1 - i];
+        palette->colors[PALETTE_SIZE - 1 - i] = temp;
+    }
+}
+
+/* generate palette from given image */
 PALETTE gen_palette(IMG *img)
 {
-    PALETTE pal;
+    PALETTE p;
+    int num_colors = 0;
+    int step = 3;
 
-    for (unsigned i=1; i<17; i++)
-    {
-        unsigned j = i;
+    for (size_t i = 0; i < img->size; i += step) {
+        RGB new_color = {img->pixels[i], img->pixels[i + 1], img->pixels[i + 2]};
 
-        uint8_t r = img->pixels[img->size / j]; j++;
-        uint8_t g = img->pixels[img->size / j]; j++;
-        uint8_t b = img->pixels[img->size / j];
+        float luminance = calculate_luminance(new_color);
+        if (!is_valid_luminance(luminance))
+            continue;
 
-        pal.colors[i-1].R = r;
-        pal.colors[i-1].G = g;
-        pal.colors[i-1].B = b;
+        if (!is_color_too_similar(p.colors, num_colors, new_color) && num_colors < PALETTE_SIZE) {
+            p.colors[num_colors++] = new_color; }
+
+        if (num_colors >= PALETTE_SIZE) {
+            break;
+        }
     }
 
-    return pal;
+    /* if not enough colors found, keep adding random colors from the image */
+    while (num_colors < PALETTE_SIZE) {
+        RGB new_color = {img->pixels[(rand() % (img->size / 3)) * 3],
+                         img->pixels[(rand() % (img->size / 3)) * 3 + 1],
+                         img->pixels[(rand() % (img->size / 3)) * 3 + 2]};
+        p.colors[num_colors++] = new_color;
+    }
+
+    /* Adjust saturation for all colors except:
+     * [0]  - background
+     * [7]  - text
+     * [8]  - I don't know
+     * [15] - foreground
+     */
+    for (int i = 0; i < PALETTE_SIZE; i++) {
+        if (i != 0 && i != 7 && i != 8 && i != 15) {
+            p.colors[i] = saturate_color(p.colors[i], 0.60); /* TODO: load from config, args?? idk */
+        }
+    }
+
+    sort_palette_by_luminance(&p);
+
+    p.colors[0] = darken_color(p.colors[0], 0.10);
+    p.colors[8] = darken_color(p.colors[8], 0.25);
+    p.colors[7] = lighten_color(p.colors[7], 0.45);
+    p.colors[15] = lighten_color(p.colors[15], 0.35);
+
+    if (LIGHT_ARG != NULL && DARK_ARG == NULL)
+        reverse_palette(&p);
+
+    /* set output color palette for logs */
+    pal_log = p;
+
+    return p;
 }
 
 /* Writes palete to stdout */
 void palette_print(PALETTE pal)
 {
-    for (unsigned i=0; i<16; i++)
+    if (QUIET_ARG != NULL)
+        return;
+
+    for (unsigned i=0; i<PALETTE_SIZE; i++)
     {
         /* Write color from palete as colored block */
         fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", pal.colors[i].R, pal.colors[i].G, pal.colors[i].B);
         fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", pal.colors[i].R, pal.colors[i].G, pal.colors[i].B);
-        if (i == 7) printf("\n");
+        if (i+1 == PALETTE_SIZE/2) printf("\n");
     }
     printf("\n");
 }
@@ -367,7 +615,7 @@ void palette_print(PALETTE pal)
  */
 char *palette_color(PALETTE pal, unsigned c, char *fmt)
 {
-    if (c > 15)
+    if (c > PALETTE_SIZE - 1)
         return NULL;
 
     char *buffer = (char*)malloc(64);
@@ -416,7 +664,8 @@ void img_free(IMG *img)
  *
  *   \033]{index};{color}\007
  */
-void set_term_colors(PALETTE pal) {
+void set_term_colors(PALETTE pal)
+{
     char buffer[1024];
     size_t offset = 0;
 
@@ -424,14 +673,15 @@ void set_term_colors(PALETTE pal) {
     const char *fmt_p = "\033]4;%d;#%s\033\\";
 
     /* Create the sequences */
-    for (unsigned i = 0; i < 16; i++) {
+    for (unsigned i = 0; i < PALETTE_SIZE; i++) {
         const char *color = palette_color(pal, i, "%02x%02x%02x");
         offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_p, i, color);
     }
-    const char *fg_color = palette_color(pal, 10, "%02x%02x%02x");
-    const char *bg_color = palette_color(pal, 11, "%02x%02x%02x");
-    const char *cursor_color = palette_color(pal, 12, "%02x%02x%02x");
-    const char *border_color = palette_color(pal, 708, "%02x%02x%02x");
+    const char *bg_color     = palette_color(pal, 0,  "%02x%02x%02x");
+    const char *fg_color     = palette_color(pal, 15, "%02x%02x%02x");
+    const char *cursor_color = palette_color(pal, 15, "%02x%02x%02x");
+    const char *border_color = palette_color(pal, 15, "%02x%02x%02x");
+
     fg_color = fg_color ? fg_color : "FFFFFF";             /* Default to white */
     bg_color = bg_color ? bg_color : "000000";             /* Default to black */
     cursor_color = cursor_color ? cursor_color : "FFFFFF"; /* Default to white */
@@ -494,40 +744,47 @@ char *load_template_file(char *filename)
  * reads content of all given and found templates paths,
  * and writes to specified or default output folder.
  */
-void process_templating(PALETTE pal)
+size_t process_templating(PALETTE pal)
 {
     TEMPLATE **templates;
-    size_t templates_count;
+    size_t templates_count, t_success = 0;
 
     /* Process templates loaded from folder */
     templates = get_templates(TEMPLATE_FOLDER_ARG, &templates_count);
-    if (templates == NULL) return;
+    if (templates == NULL) return -1;
 
     for (size_t i = 0; i < templates_count; i++)
         process_template(templates[i], pal);
 
     if (OUTPUT_NAME_ARG != NULL) {
         check_output_dir(OUTPUT_NAME_ARG);
-        template_write(templates[templates_count-1], OUTPUT_NAME_ARG);
+        t_success += template_write(templates[templates_count-1], OUTPUT_NAME_ARG);
         templates_count--;
     }
 
     check_output_dir(OUTPUT_ARG);
     for (size_t i = 0; i < templates_count; i++)
-        template_write(templates[i], OUTPUT_ARG);
+        t_success += template_write(templates[i], OUTPUT_ARG);
+
+    return t_success;
 }
 
 /* load t->path file to buffer and replaces content between delim with colors from PALETTE colors */
 void process_template(TEMPLATE *t, PALETTE pal)
 {
+    if (t == NULL) {
+        t->content = NULL;
+        return;
+    }
+    log_c("  - generating template buffer: %s", t->name);
+
     char *template_buffer = calloc(1, 1);
     size_t template_size = 0;
     int last_pos = 0;
     int buffrd_pos = 0;
     
     hell_parser_t *p = hell_parser_create(load_template_file(t->path));
-    if (p == NULL)
-    {
+    if (p == NULL) {
         t->content = NULL;
         return;
     }
@@ -563,7 +820,17 @@ void process_template(TEMPLATE *t, PALETTE pal)
                     {
                         assert(number != NULL);
 
-                        if (pn->pos + 1 < pn->length)
+                        /* check if an argument is 'w' ; stands for wallpaper path */
+                        if (number[0] == 'w')
+                        {
+                            size_t path_len = strlen(IMAGE_ARG);
+                            template_size += path_len + 1;
+                            template_buffer = realloc(template_buffer, template_size);
+                            if (template_buffer == NULL) return;
+
+                            strcat(template_buffer, strdup(IMAGE_ARG));
+                        }
+                        else if (pn->pos + 1 < pn->length)
                         {
                             if (!strcmp(HELL_COL(pn), "hex"))
                             {
@@ -578,7 +845,7 @@ void process_template(TEMPLATE *t, PALETTE pal)
                             }
                             if (!strcmp(HELL_COL(pn), "rgb"))
                             {
-                                const char *color = palette_color(pal, atoi(number), "rgb(%d, %d, %d)");
+                                const char *color = palette_color(pal, atoi(number), "%d, %d, %d");
                                 size_t color_len = strlen(color);
 
                                 template_size += color_len + 1;
@@ -711,28 +978,33 @@ TEMPLATE **get_templates(const char *dir_path, size_t *_size)
     return t_arr;
 }
 
-/* write generated template to dir */
-void template_write(TEMPLATE *t, char *dir)
+/* 
+ * write generated template to dir,
+ * returns 1 on success
+ */
+size_t template_write(TEMPLATE *t, char *dir)
 {
-    if (t == NULL || dir == NULL) return;
-    if (t->content == NULL) return;
+    if (t == NULL || dir == NULL) return 0;
+    if (t->content == NULL) return 0;
 
     char* path = malloc(strlen(dir) + strlen(t->name));
     if (path)
         sprintf(path, "%s%s", dir, t->name);
     else
-        return;
+        return 0;
 
     FILE *f = fopen(path, "w");
     if (f == NULL) {
         perror(NULL);
         warn("Cannot write to file: %s\n", t->path);
-        return;
+        return 0;
     }
 
     fprintf(f, "%s", t->content);
+    log_c("  - wrote template to: %s", t->path);
 
     fclose(f);
+    return 1;
 }
 
 /***
@@ -741,17 +1013,26 @@ void template_write(TEMPLATE *t, char *dir)
 int main(int argc, char **argv)
 {
     if (set_args(argc,argv) != 0)
-    {
-        hellwal_usage(argv[0]);
-        exit(EXIT_FAILURE);
-    }
+        err("arguments error");
 
+    log_c("Loading image %s", IMAGE_ARG);
     IMG *img = img_load(IMAGE_ARG);
+    log_c("Loaded!");
+
+    log_c("Generating color palette...");
     PALETTE pal = gen_palette(img);
-    img_free(img);
-
     palette_print(pal);
-    set_term_colors(pal);
+    log_c("...Generated!\n");
 
-    process_templating(pal);
+
+    log_c("Setting terminals...");
+    set_term_colors(pal);
+    log_c("...All set!\n");
+
+    log_c("Processing templates: ");
+    size_t t_count = process_templating(pal);
+    log_c("Sucessfully processed %d templates!", t_count);
+
+    img_free(img);
+    return 0;
 }
