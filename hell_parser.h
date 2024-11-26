@@ -41,12 +41,12 @@
  *            {
  *                if (ch == delim)
  *                {
- *                    parser->pos -= 1; // We have to do that so hell_parser_delim
+ *                    parser->pos -= 1; // We have to do that so hell_parser_delim_buffer_between
  *                                      // keeps track of the position
  *
  *                    // Look out for delim, which is '%',
  *                    // count is set to 2, so it will trigger when it finds "%%"
- *                    if (hell_parser_delim(parser, delim, 2, &buffer) == HELL_PARSER_OK)
+ *                    if (hell_parser_delim_buffer_between(parser, delim, 2, &buffer) == HELL_PARSER_OK)
  *                    {
  *                        printf("Extracted content: '%s'\n", buffer);
  *                        free(buffer);
@@ -116,10 +116,12 @@ typedef struct
 } hell_parser_t;
 
 /* Function Declarations */
-HELL_DEF hell_parser_t *hell_parser_create(const char *input);
 HELL_DEF void hell_parser_destroy(hell_parser_t *parser);
-HELL_DEF hell_parser_status_t hell_parser_next(hell_parser_t *parser, char *out);
 HELL_DEF int hell_parser_eof(const hell_parser_t *parser);
+HELL_DEF hell_parser_t *hell_parser_create(const char *input);
+HELL_DEF hell_parser_status_t hell_parser_next(hell_parser_t *parser, char *out);
+HELL_DEF hell_parser_status_t hell_parser_delim(hell_parser_t *parser, char delim, unsigned count);
+HELL_DEF hell_parser_status_t hell_parser_delim_buffer_between(hell_parser_t *parser, char delim, unsigned count, char **buffer);
 
 /* Implementation */
 #ifdef HELL_PARSER_IMPLEMENTATION
@@ -159,12 +161,38 @@ HELL_DEF hell_parser_status_t hell_parser_next(hell_parser_t *parser, char *out)
     return HELL_PARSER_OK;
 }
 
+HELL_DEF hell_parser_status_t hell_parser_delim(hell_parser_t *parser, char delim, unsigned count)
+{
+    if (!parser)
+        return HELL_PARSER_ERROR;
+
+    count = (count == 0) ? 1 : count;  /* Default count to 1 if 0                      */
+    size_t matched = 0;                /* Tracks consecutive delimiter matches         */
+
+    while (!hell_parser_eof(parser))
+    {
+        char current;
+        if (hell_parser_next(parser, &current) != HELL_PARSER_OK)
+            break;
+
+        if (current == delim)
+        {
+            matched++;
+            if (matched == count)
+                return HELL_PARSER_OK;
+        }
+        else
+            matched = 0;
+    }
+    return HELL_PARSER_ERROR;
+}
+
 /* Get content inside delim [count] times, if count is 0 it defaults to 1.
  * For example, for '%' with count 2, it triggers on "%%" in the text.
  * Dynamically allocates memory for the content between delimiters and stores it in `*buffer`.
  * CALLER MUST FREE THE ALLOCATED MEMORY.
  */
-HELL_DEF hell_parser_status_t hell_parser_delim(hell_parser_t *parser, char delim, unsigned count, char **buffer)
+HELL_DEF hell_parser_status_t hell_parser_delim_buffer_between(hell_parser_t *parser, char delim, unsigned count, char **buffer)
 {
     if (!parser || !buffer)
         return HELL_PARSER_ERROR;

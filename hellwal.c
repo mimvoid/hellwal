@@ -1,15 +1,23 @@
-/*  hellwal - v0.0.2 - MIT LICENSE
+/*  hellwal - v0.0.3 - MIT LICENSE
  *
- *  [ ] TODO: config ( is it really needed? )                      
- *  [ ] TODO: tweaking options for generated colors                
- *  [ ] TODO: support for other OS's like Mac or Win               
- *  [ ] TODO: support for already built themes (like gruvbox etc.) 
- *  ---------------------------------------------------------------
- *  [x] TODO: do more pleasant color schemes                       
- *  [x] TODO: print proper program usage                           
- *  [x] TODO: gen. colors                                          
- *  [x] TODO: templating                                           
- *  [x] TODO: parsing                                              
+ *  [ ] TODO: config ( is it really needed? )                               
+ *  [ ] TODO: support for other OS's like Mac or Win                        
+ *  ------------------------------------------------------------------------
+ *  [x] TODO: support for already built themes (like gruvbox etc.)          
+ *  [x] TODO: tweaking options for generated colors (func + dark-light mode 
+ *  [x] TODO: do more pleasant color schemes                                
+ *  [x] TODO: print proper program usage                                    
+ *  [x] TODO: gen. colors                                                   
+ *  [x] TODO: templating                                                    
+ *  [x] TODO: parsing                                                       
+ *
+ *  changelog v0.0.3:
+ *   - removed TEMPLATE_ARG, OUTPUT_NAME_ARG - I've come to conclusion that it's useless.
+ *   - changed how 'variables' are parsed. Now index of colors ex. "color|0|.hex" is depracated. Use "color0.hex" instead.
+ *   - added support for static themes, for example you can add gruvbox, catppuccin etc.
+ *   - added THEME_ARG, THEME_FOLDER_ARG
+ *   - added keyword "wallpaper" for wallpaper path.
+ *   - added example themes in ./themes folder
  *
  *  changelog v0.0.2:
  *   - actually working and better generated colorschemes
@@ -48,14 +56,17 @@
 /* just palette size */
 #define PALETTE_SIZE 16
 
-/* fmt macro for color */
-#define HELL_COL(p) p->input + p->pos + 1
+/* set default value for global char* variables */
+#define SET_DEF(x, s) \
+    if (x == NULL) \
+        x = home_full_path(s); \
+    else \
+        x = home_full_path(x);
 
 
 /***
  * STRUCTURES
  ***/
-
 
 /* IMG
  * 
@@ -118,7 +129,7 @@ char HELLWAL_DELIM = '%';
 char HELLWAL_DELIM_COUNT = 2;
 
 /* image path, which will be used to create PALETTE */
-char *IMAGE_ARG =  NULL;
+char *IMAGE_ARG = NULL;
 
 /* quiet arg, if NULL you will get verbose output,
  * otherwise its going to print everthing normally 
@@ -129,27 +140,21 @@ char *QUIET_ARG = NULL;
 char *DARK_ARG  = NULL;
 char *LIGHT_ARG = NULL;
 
-/* folder, contains templates where colors will be placed */
-char *TEMPLATE_FOLDER_ARG =  NULL;
+/* folder that contains templates */
+char *TEMPLATE_FOLDER_ARG = NULL;
 
 /* 
  * output folder for generated templates,
  * default one is in ~/.cache/hellwal/
  */
-char *OUTPUT_ARG =  NULL;
+char *OUTPUT_ARG = NULL;
 
-/*
- * you can specify single template input file to which you want to generate;
- * This option does not collide with TEMPLATE_FOLDER_ARG or default path: ~/.config/hellwal/templates
- */
-char *TEMPLATE_ARG =  NULL;
+/* name of theme in THEME_FOLDER_ARG,
+ * or (in case was not found) path to file */
+char *THEME_ARG = NULL;
 
-/* 
- * specify output of single template you provided,
- * it works only with option above: TEMPLATE_ARG,
- * if not set, default path will be used.
- */
-char *OUTPUT_NAME_ARG = NULL;
+/* folder that contains static themes */
+char *THEME_FOLDER_ARG  = NULL;
 
 /* one palette as global variable, so log_c() can access colors */
 size_t pal_log_iter = 1;
@@ -173,6 +178,7 @@ void hellwal_usage(const char *name);
 char* home_full_path(const char* path);
 
 /* logging */
+void eu(const char *format, ...);
 void err(const char *format, ...);
 void warn(const char *format, ...);
 void log_c(const char *format, ...);
@@ -183,8 +189,12 @@ void img_free(IMG *img);
 
 /* RGB */
 float calculate_color_distance(RGB a, RGB b);
+
+int is_color_palette_var(char *name);
 int is_valid_luminance(float luminance);
+int is_hex_to_rgb(const char *hex, RGB *p);
 int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
+
 RGB darken_color(RGB color, float factor);
 RGB lighten_color(RGB color, float factor);
 RGB saturate_color(RGB color, float factor);
@@ -200,12 +210,16 @@ void reverse_palette(PALETTE *palette);
 void sort_palette_by_luminance(PALETTE *palette);
 
 /* templates */
-size_t process_templating(PALETTE pal);
-char *load_template_file(char *filename);
+char *load_file(char *filename);
+void process_templating(PALETTE pal);
 size_t template_write(TEMPLATE *t, char *dir);
 void process_template(TEMPLATE *t, PALETTE pal);
-TEMPLATE **get_templates(const char *dir_path, size_t *_size);
+TEMPLATE **get_template_structure_dir(const char *dir_path, size_t *_size);
 
+/* themes */
+char *load_theme(char *themename);
+PALETTE process_themeing(char *theme);
+int process_theme(char *t, PALETTE *pal);
 
 /*** 
  * FUNCTIONS DECLARATIONS
@@ -216,17 +230,17 @@ void hellwal_usage(const char *name)
 {
     printf("Usage:\n\t%s [OPTIONS]\n", name);
     printf("Options:\n");
-    printf("  --image,           -i <image>     Set the image file.\n\n");
-    printf("  --dark,            -d             Set dark mode (on by default)\n");
+    printf("  --image,           -i <image>     Set image file.\n\n");
+    printf("  --dark,            -d             Set dark mode (ON by default)\n");
     printf("  --light,           -l             Set light mode\n\n");
 
     printf("  --quiet,           -q             Set silent output\n\n");
 
-    printf("  --template-folder, -f <folder>    Set the template folder.\n");
-    printf("  --output,          -o <output>    Set the output folder for generated templates\n\n");
+    printf("  --template-folder, -f <folder>    Set template folder.\n");
+    printf("  --output,          -o <folder>    Set output folder for generated templates\n\n");
 
-    printf("  --template,        -t <template>  Set the template file.\n");
-    printf("  --output-name,     -n <output>    Set the output name for single one, specified generated template\n\n");
+    printf("  --theme,           -t <file>      Set theme from THEME FOLDER or (in case was not found) path to theme file\n");
+    printf("  --theme-folder,    -k <folder>    Set folder that contains themes\n\n");
 
     printf("  --help,            -h             Display this help and exit.\n");
 
@@ -236,27 +250,17 @@ void hellwal_usage(const char *name)
     printf("  --light: colors go ffffff (#ffffff)\n\n");
     printf("  --quiet: \n\n"); /* XD */
 
-    printf("  --template-folder: folder which contains templates to process\n \
-            to generate colors ; default one is ~/.config/hellwal/templates \n\n");
+    printf("  --template-folder: folder which contains templates to process to generate colors ; default one is ~/.config/hellwal/templates \n\n");
+    printf("  --output: output folder where generated templates will be saved, default one is set to ~/.cache/hellwal/\n\n");
 
-    printf("  --output: output folder where generated templates\n \
-              will be saved, default one is set to ~/.cache/hellwal/\n\n");
-
-    printf("  --template: you can specify single template input file which you\n \
-              want to generate ; This option does not collide with --template-folder\n\n");
-
-    printf("  --output-name: specify output of single template you provided\n \
-            it works only with option above: --template,\n \
-            if not set, default path will be used.\n\n");
+    printf("  --theme: name of theme in theme folder OR (in case was not found) path to theme file\n\n");
+    printf("  --theme-folder: folder that contains themes, default one is set to ~/.config/hellwal/themes/\n");
 }
 
 /* set given arguments */
 int set_args(int argc, char *argv[])
 {
-    if (argc < 2)
-        return 1;
-
-    int j; /* 'int i' from for loop counter to track incomplete option error */
+    int j = 0; /* 'int i' from for loop counter to track incomplete option error */
 
     for (int i = 1; i < argc; i++)
     {
@@ -271,15 +275,6 @@ int set_args(int argc, char *argv[])
         {
             if (i + 1 < argc)
                 TEMPLATE_FOLDER_ARG = argv[++i];
-            else
-            {
-                argc = -1;
-            }
-        }
-        else if ((strcmp(argv[i], "--template") == 0 || strcmp(argv[i], "-t") == 0))
-        {
-            if (i + 1 < argc)
-                TEMPLATE_ARG = argv[++i];
             else
             {
                 argc = -1;
@@ -309,7 +304,7 @@ int set_args(int argc, char *argv[])
             /* anything other than NULL, makes light mode */
             LIGHT_ARG = "";
         }
-        else if ((strcmp(argv[i], "--output-folder") == 0 || strcmp(argv[i], "-o") == 0))
+        else if ((strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0))
         {
             if (i + 1 < argc)
                 OUTPUT_ARG = argv[++i];
@@ -318,10 +313,19 @@ int set_args(int argc, char *argv[])
                 argc = -1;
             }
         }
-        else if ((strcmp(argv[i], "--output-name") == 0 || strcmp(argv[i], "-n") == 0))
+        else if ((strcmp(argv[i], "--theme") == 0 || strcmp(argv[i], "-t") == 0))
         {
             if (i + 1 < argc)
-                OUTPUT_NAME_ARG = argv[++i];
+                THEME_ARG = argv[++i];
+            else
+            {
+                argc = -1;
+            }
+        }
+        else if ((strcmp(argv[i], "--theme-folder") == 0 || strcmp(argv[i], "-k") == 0))
+        {
+            if (i + 1 < argc)
+                THEME_FOLDER_ARG = argv[++i];
             else
             {
                 argc = -1;
@@ -329,41 +333,41 @@ int set_args(int argc, char *argv[])
         }
         else
         {
-            err("Unknown option: %s\n", argv[i]);
+            eu("Unknown option: %s", argv[i]);
         }
     }
 
-    if (argc == -1) {
-        err("Incomplete option: %s\n", argv[j]); }
+    if (argc == -1)
+        eu("Incomplete option: %s", argv[j]);
 
+    /* handle needed arguments */
+    if (IMAGE_ARG == NULL && THEME_ARG == NULL && THEME_FOLDER_ARG == NULL)
+        err("You have to provide --image, or --theme");
 
-    if (IMAGE_ARG == NULL) {
-        err("You have to provide image path"); }
+    if (IMAGE_ARG == NULL && THEME_ARG == NULL && THEME_FOLDER_ARG != NULL)
+        err("You have to provide theme name or path");
 
-    if (TEMPLATE_FOLDER_ARG == NULL) {
-        TEMPLATE_FOLDER_ARG = home_full_path("~/.config/hellwal/templates"); }
-    else
-        TEMPLATE_FOLDER_ARG = home_full_path(TEMPLATE_FOLDER_ARG);
+    if (THEME_ARG  == NULL && THEME_FOLDER_ARG != NULL)
+        warn("specified theme folder is not used: \"%s\"", THEME_FOLDER_ARG);
 
-    if (OUTPUT_ARG == NULL) {
-        OUTPUT_ARG = home_full_path("~/.cache/hellwal/"); }
-    else
-        OUTPUT_ARG = home_full_path(OUTPUT_ARG);
+    if (THEME_ARG  != NULL && IMAGE_ARG != NULL)
+        err("you cannot use both --image and --theme:");
 
-    if (OUTPUT_NAME_ARG != NULL && TEMPLATE_ARG == NULL) warn("--output-name is not used", OUTPUT_NAME_ARG);
-    if (OUTPUT_NAME_ARG == NULL) {
-        OUTPUT_NAME_ARG = OUTPUT_ARG; }
-    else
-        OUTPUT_NAME_ARG = home_full_path(OUTPUT_NAME_ARG);
-
+    /* If not specified, set default ones */
+    SET_DEF(OUTPUT_ARG, "~/.cache/hellwal/");
+    SET_DEF(THEME_FOLDER_ARG , "~/.config/hellwal/themes");
+    SET_DEF(TEMPLATE_FOLDER_ARG, "~/.config/hellwal/templates");
 
     return 0;
 }
 
-/* prints to stderr formatted output and exits with EXIT_FAILURE */
-void err(const char *format, ...)
+/* 
+ * prints to stderr formatted output and exits with EXIT_FAILURE,
+ * also prints hellwal_usage()
+ */
+void eu(const char *format, ...)
 {
-    fprintf(stderr, "\n[ERROR]: ");
+    fprintf(stderr, "[ERROR]: ");
 
     va_list ap;
     va_start(ap, format);
@@ -377,10 +381,25 @@ void err(const char *format, ...)
     exit(EXIT_FAILURE);
 }
 
+/* prints to stderr formatted output and exits with EXIT_FAILURE */
+void err(const char *format, ...)
+{
+    fprintf(stderr, "[ERROR]: ");
+
+    va_list ap;
+    va_start(ap, format);
+    vfprintf(stderr, format, ap);
+    va_end(ap);
+
+    fprintf(stderr, "\n");
+
+    exit(EXIT_FAILURE);
+}
+
 /* prints to stderr formatted output, but not exits */
 void warn(const char *format, ...)
 {
-    fprintf(stderr, "\n[WARNING]: ");
+    fprintf(stderr, "[WARNING]: ");
 
     va_list ap;
     va_start(ap, format);
@@ -396,29 +415,24 @@ void log_c(const char *format, ...)
     if (QUIET_ARG != NULL)
         return;
 
-    unsigned idx = 0;
-
-    if (pal_log_iter > PALETTE_SIZE - 4)
-        pal_log_iter = 4;
-    if (pal_log_iter == 1)
-        idx = pal_log_iter ;
-    else
-        idx = pal_log_iter;
-
     va_list ap;
     va_start(ap, format);
 
     fprintf(stdout, "\033[38;2;%d;%d;%dm[INFO]: ",
-            pal_log.colors[idx].R,
-            pal_log.colors[idx].G,
-            pal_log.colors[idx].B);
+            pal_log.colors[pal_log_iter].R,
+            pal_log.colors[pal_log_iter].G,
+            pal_log.colors[pal_log_iter].B);
 
     vfprintf(stdout, format, ap);
     fprintf(stdout, "\033[0m");
 
     va_end(ap);
     fprintf(stdout, "\n");
-    pal_log_iter+=2;
+
+    if (pal_log_iter != 1)
+        pal_log_iter+=4;
+    if (pal_log_iter > PALETTE_SIZE)
+        pal_log_iter = 2;
 }
 
 
@@ -450,6 +464,22 @@ void check_output_dir(char *path)
     struct stat st;
     if (stat(path, &st) == -1)
         mkdir(path, 0700);
+}
+
+void remove_whitespaces(char *str)
+{
+    if (!str) return;
+
+    char *read = str;
+    char *write = str;
+
+    while (*read) {
+        if (*read != ' ' && *read != '\t' && *read != '\n' && *read != '\r') {
+            *write++ = *read;
+        }
+        read++;
+    }
+    *write = '\0';
 }
 
 /* calculate how bright is color */
@@ -538,6 +568,8 @@ void reverse_palette(PALETTE *palette)
 /* generate palette from given image */
 PALETTE gen_palette(IMG *img)
 {
+    log_c("Generating color palette...");
+
     PALETTE p;
     int num_colors = 0;
     int step = 3;
@@ -584,12 +616,11 @@ PALETTE gen_palette(IMG *img)
     p.colors[7] = lighten_color(p.colors[7], 0.45);
     p.colors[15] = lighten_color(p.colors[15], 0.35);
 
-    if (LIGHT_ARG != NULL && DARK_ARG == NULL)
-        reverse_palette(&p);
-
     /* set output color palette for logs */
     pal_log = p;
+    pal_log_iter = 2;
 
+    log_c("...Generated!");
     return p;
 }
 
@@ -627,17 +658,22 @@ char *palette_color(PALETTE pal, unsigned c, char *fmt)
 /* Load image file using stb, return IMG structure */
 IMG *img_load(char *filename)
 {
+    if (IMAGE_ARG == NULL)
+        err("No image provided");
+    log_c("Loading image %s", IMAGE_ARG);
+
     int width, height;
     int numberOfChannels;
     uint8_t *imageData = stbi_load(filename, &width, &height, &numberOfChannels, 0);
 
-    if (imageData == 0) err("Error while loading the file:!\n");
+    if (imageData == 0) err("Error while loading the file: %s", filename);
 
     IMG *img = malloc(sizeof(IMG));
 
     img->size = width * height * numberOfChannels;
     img->pixels = imageData;
 
+    log_c("Loaded!");
     return img;
 }
 
@@ -666,6 +702,8 @@ void img_free(IMG *img)
  */
 void set_term_colors(PALETTE pal)
 {
+    log_c("Setting terminals...");
+
     char buffer[1024];
     size_t offset = 0;
 
@@ -707,14 +745,21 @@ void set_term_colors(PALETTE pal)
 
     /* Also write to the current terminal */
     fwrite(buffer, 1, offset, stdout);
+
+    log_c("...All set!\n");
 }
 
-/* Loads template text file, returns buffer if succeded, otherwise NULL */
-char *load_template_file(char *filename)
+/* 
+ * Loads content from file file to buffer,
+ * returns buffer if succeded, otherwise NULL
+ */
+char *load_file(char *filename)
 {
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
-    warn("Failed to open file: %s", filename); return NULL; }
+        warn("Failed to open file: %s", filename);
+        return NULL;
+    }
 
     fseek(file, 0, SEEK_END);
     int size = ftell(file);
@@ -733,10 +778,6 @@ char *load_template_file(char *filename)
 
     fclose(file);
 
-    TEMPLATE *template = malloc(sizeof(TEMPLATE));
-    template->path = filename;
-    template->content = buffer;
-
     return buffer;
 }
 
@@ -744,29 +785,24 @@ char *load_template_file(char *filename)
  * reads content of all given and found templates paths,
  * and writes to specified or default output folder.
  */
-size_t process_templating(PALETTE pal)
+void process_templating(PALETTE pal)
 {
+    log_c("Processing templates: ");
+
     TEMPLATE **templates;
     size_t templates_count, t_success = 0;
 
     /* Process templates loaded from folder */
-    templates = get_templates(TEMPLATE_FOLDER_ARG, &templates_count);
-    if (templates == NULL) return -1;
-
-    for (size_t i = 0; i < templates_count; i++)
-        process_template(templates[i], pal);
-
-    if (OUTPUT_NAME_ARG != NULL) {
-        check_output_dir(OUTPUT_NAME_ARG);
-        t_success += template_write(templates[templates_count-1], OUTPUT_NAME_ARG);
-        templates_count--;
-    }
+    templates = get_template_structure_dir(TEMPLATE_FOLDER_ARG, &templates_count);
+    if (templates == NULL) return;
 
     check_output_dir(OUTPUT_ARG);
-    for (size_t i = 0; i < templates_count; i++)
+    for (size_t i = 0; i < templates_count; i++) {
+        process_template(templates[i], pal);
         t_success += template_write(templates[i], OUTPUT_ARG);
+    }
 
-    return t_success;
+    log_c("Sucessfully processed %d templates!", t_success);
 }
 
 /* load t->path file to buffer and replaces content between delim with colors from PALETTE colors */
@@ -783,7 +819,7 @@ void process_template(TEMPLATE *t, PALETTE pal)
     int last_pos = 0;
     int buffrd_pos = 0;
     
-    hell_parser_t *p = hell_parser_create(load_template_file(t->path));
+    hell_parser_t *p = hell_parser_create(load_file(t->path));
     if (p == NULL) {
         t->content = NULL;
         return;
@@ -797,71 +833,90 @@ void process_template(TEMPLATE *t, PALETTE pal)
             if (ch == HELLWAL_DELIM)
             {
                 p->pos -= 1;  
+                int idx = 0;
+                size_t len = 0;
+                char *var_arg = NULL;
                 char *delim_buf = NULL;
 
                 last_pos = p->pos + 1;
 
-                if (hell_parser_delim(p, HELLWAL_DELIM, HELLWAL_DELIM_COUNT, &delim_buf) == HELL_PARSER_OK)
+                int size_before_delim = last_pos - buffrd_pos - 1;
+                if (size_before_delim > 0)
                 {
-                    assert(p->pos - last_pos > 0);
-                    
-                    int size_before_delim = last_pos - buffrd_pos - 1;
-                    if (size_before_delim > 0)
+                    template_size += size_before_delim + 1;
+                    template_buffer = realloc(template_buffer, template_size);
+                    strncat(template_buffer, p->input + buffrd_pos, size_before_delim);
+                }
+
+                if (hell_parser_delim_buffer_between(p, HELLWAL_DELIM, HELLWAL_DELIM_COUNT, &delim_buf) == HELL_PARSER_OK)
+                {
+                    hell_parser_t *pd = hell_parser_create(delim_buf);
+                    if (pd == NULL)
+                        err("Failed to allocate parser");
+
+                    if (hell_parser_delim(pd, '.', 1) == HELL_PARSER_OK) {
+                        size_t l_size = pd->pos - 1;
+                        size_t r_size = pd->length - pd->pos + 1;
+
+                        char *left  = calloc(1, l_size);
+                        char *right = calloc(1, r_size);
+
+                        strncpy(left, pd->input, l_size);
+                        strncpy(right, pd->input + pd->pos + 1, r_size);
+
+                        remove_whitespaces(left);
+                        remove_whitespaces(right);
+
+                        idx = is_color_palette_var(left);
+                        if (idx != -1 && pd->pos + 1 < pd->length)
+                        {
+                            /* 
+                             * check if after '.' is rgb, if yes get output as rgb,
+                             * if not output will always be hex
+                             */
+                            if (!strcmp(right, "rgb"))
+                                var_arg = palette_color(pal, idx, "%d, %d, %d");
+                            else
+                                var_arg = palette_color(pal, idx, "%02x%02x%02x");
+                        }
+                        free(left);
+                        free(right);
+                    }
+                    /* check if an argument stands for wallpaper path */
+                    else if (!strcmp(delim_buf, "wallpaper"))
                     {
-                        template_size += size_before_delim + 1;
+                        if (IMAGE_ARG != NULL)
+                        {
+                            len = strlen(IMAGE_ARG);
+                            var_arg = IMAGE_ARG;
+                        }
+                        else
+                            var_arg = "";
+                    }
+                    //* TODO: keywords not working except "wallpaper" */
+                    //* TODO: add rgb as an option for keywords */
+                    else if (!strcmp(delim_buf, "foregound"))
+                        var_arg = palette_color(pal, 15, "%02x%02x%02x");
+                    else if (!strcmp(delim_buf, "background"))
+                        var_arg = palette_color(pal, 0, "%02x%02x%02x");
+                    else if (!strcmp(delim_buf, "cursor"))
+                        var_arg = palette_color(pal, 15, "%02x%02x%02x");
+
+                    log_c("AAAA: %s", delim_buf);
+
+                    if (var_arg != NULL) {
+                        len = strlen(var_arg);
+                        template_size += len + 1;
                         template_buffer = realloc(template_buffer, template_size);
-                        strncat(template_buffer, p->input + buffrd_pos, size_before_delim);
+                        if (template_buffer == NULL) return;
+                        strcat(template_buffer, var_arg);
                     }
-
-                    hell_parser_t *pn = hell_parser_create(delim_buf);
-                    char *number = NULL;
-
-                    if (hell_parser_delim(pn, '|', 1, &number) == HELL_PARSER_OK)
-                    {
-                        assert(number != NULL);
-
-                        /* check if an argument is 'w' ; stands for wallpaper path */
-                        if (number[0] == 'w')
-                        {
-                            size_t path_len = strlen(IMAGE_ARG);
-                            template_size += path_len + 1;
-                            template_buffer = realloc(template_buffer, template_size);
-                            if (template_buffer == NULL) return;
-
-                            strcat(template_buffer, strdup(IMAGE_ARG));
-                        }
-                        else if (pn->pos + 1 < pn->length)
-                        {
-                            if (!strcmp(HELL_COL(pn), "hex"))
-                            {
-                                const char *color = palette_color(pal, atoi(number), "%02x%02x%02x");
-                                size_t color_len = strlen(color);
-
-                                template_size += color_len + 1;
-                                template_buffer = realloc(template_buffer, template_size);
-                                if (template_buffer == NULL) return;
-
-                                strcat(template_buffer, color);
-                            }
-                            if (!strcmp(HELL_COL(pn), "rgb"))
-                            {
-                                const char *color = palette_color(pal, atoi(number), "%d, %d, %d");
-                                size_t color_len = strlen(color);
-
-                                template_size += color_len + 1;
-                                template_buffer = realloc(template_buffer, template_size);
-                                if (template_buffer == NULL) return;
-
-                                strcat(template_buffer, color);
-                            }
-                        }
-                    }
+                     
                     /* Update last read buffer position */
                     buffrd_pos = p->pos;
 
                     free(delim_buf);
-                    free(number);
-                    hell_parser_destroy(pn);
+                    hell_parser_destroy(pd);
                 }
             }
         }
@@ -888,8 +943,8 @@ void process_template(TEMPLATE *t, PALETTE pal)
     t->content = template_buffer;
 }
 
-/* load templates from dir */
-TEMPLATE **get_templates(const char *dir_path, size_t *_size)
+/* return array of TEMPLATE structure of files in directory */
+TEMPLATE **get_template_structure_dir(const char *dir_path, size_t *_size)
 {
     if (dir_path == NULL) return NULL;
 
@@ -899,15 +954,13 @@ TEMPLATE **get_templates(const char *dir_path, size_t *_size)
     DIR *dir = opendir(dir_path);
     if (dir == NULL)
     {
-        warn("Cannot access templates directory: %s", dir_path);
+        warn("Cannot access directory: %s", dir_path);
         return NULL;
     }
 
     struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL)
-    {
-        if (entry->d_type == DT_REG)
-        {
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG) {
             size_t path_len = strlen(dir_path) + strlen(entry->d_name) + 2; // +2 for '/' and '\0'
             char *full_path = malloc(path_len);
             if (full_path == NULL)
@@ -939,39 +992,6 @@ TEMPLATE **get_templates(const char *dir_path, size_t *_size)
 
     closedir(dir);
 
-    /* single template provided from arguments */
-    if (TEMPLATE_ARG != NULL)
-    {
-        TEMPLATE **new_t_arr = realloc(t_arr, (size + 1) * sizeof(TEMPLATE *));
-        if (new_t_arr == NULL) {
-            perror("Failed to allocate memory for templates array");
-            free(t_arr);
-            *_size = -1;
-            TEMPLATE_ARG = NULL;
-            return NULL;
-        }
-
-        t_arr = new_t_arr;
-        t_arr[size] = calloc(1, sizeof(TEMPLATE));
-        if (t_arr[size] == NULL) {
-            perror("Failed to allocate memory for new template");
-            *_size = -1;
-            return NULL;
-        }
-
-        char *temp = strdup(TEMPLATE_ARG);
-        char *name = strrchr(temp, '/');
-        if (name)
-            name++; // Move past the '/'
-        else
-            name = temp; // Use the full string if no '/' is found
-
-        t_arr[size]->name = name;
-        t_arr[size]->path = TEMPLATE_ARG;
-
-        size++;
-    }
-
     if (_size)
         *_size = size;
 
@@ -982,8 +1002,7 @@ TEMPLATE **get_templates(const char *dir_path, size_t *_size)
  * write generated template to dir,
  * returns 1 on success
  */
-size_t template_write(TEMPLATE *t, char *dir)
-{
+size_t template_write(TEMPLATE *t, char *dir) {
     if (t == NULL || dir == NULL) return 0;
     if (t->content == NULL) return 0;
 
@@ -996,7 +1015,7 @@ size_t template_write(TEMPLATE *t, char *dir)
     FILE *f = fopen(path, "w");
     if (f == NULL) {
         perror(NULL);
-        warn("Cannot write to file: %s\n", t->path);
+        warn("Cannot write to file: %s", t->path);
         return 0;
     }
 
@@ -1007,6 +1026,164 @@ size_t template_write(TEMPLATE *t, char *dir)
     return 1;
 }
 
+/*
+ * check in directory for theme with provided name,
+ * if not exist, try to open it as a path */
+char *load_theme(char *themename)
+{
+    log_c("Loading static theme: %s", THEME_ARG);
+    DIR *dir = opendir(THEME_FOLDER_ARG);
+    if (dir == NULL)
+        err("Cannot access directory: %s", THEME_FOLDER_ARG);
+
+    char *t = NULL;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        if (entry->d_type == DT_REG && strcmp(entry->d_name, themename) == 0)
+        {
+            size_t path_len = strlen(THEME_FOLDER_ARG) + strlen(entry->d_name) + 2; // +2 for '/' and '\0'
+            char *path = malloc(path_len);
+            if (path == NULL) {
+                perror("Failed to allocate memory for file path");
+                closedir(dir);
+                return NULL;
+            }
+
+            sprintf(path, "%s/%s", THEME_FOLDER_ARG, entry->d_name); 
+            t = load_file(path);
+            
+            if (t != NULL)
+                return t;
+        }
+    }
+
+    log_c("Theme not found in directory: \"%s\", trying as path");
+
+    t = load_file(themename);
+    if (t != NULL)
+        return t;
+
+    return NULL;
+}
+
+int hex_to_rgb(const char *hex, RGB *p)
+{
+    if (!hex || hex[0] != '#' || (strlen(hex) != 7 && strlen(hex) != 4)) {
+        return 0;
+    }
+
+    if (strlen(hex) == 7) {
+        // #RRGGBB format
+        p->R = (int)strtol(hex + 1, NULL, 16) >> 16 & 0xFF;
+        p->G = (int)strtol(hex + 3, NULL, 16) >> 8 & 0xFF;
+        p->B = (int)strtol(hex + 5, NULL, 16) & 0xFF;
+    } else if (strlen(hex) == 4) {
+        // #RGB format (expand each digit to 2 digits)
+        p->R = (int)strtol((char[]){hex[1], hex[1], '\0'}, NULL, 16);
+        p->G = (int)strtol((char[]){hex[2], hex[2], '\0'}, NULL, 16);
+        p->B = (int)strtol((char[]){hex[3], hex[3], '\0'}, NULL, 16);
+    }
+
+    return 1;
+}
+
+int is_color_palette_var(char *name)
+{
+    for (size_t i = 0; i < PALETTE_SIZE; i++) {
+        char *col = calloc(1, 16);
+        sprintf(col, "color%lu", i);
+
+        if (strcmp(col, name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+int process_theme(char *t, PALETTE *pal)
+{
+    int processed_colors = 0;
+
+    hell_parser_t *p = hell_parser_create(t);
+    if (p == NULL) 
+        err("Failed to create parser");
+
+    while (!hell_parser_eof(p))
+    {
+        char ch;
+        if (hell_parser_next(p, &ch) == HELL_PARSER_OK)
+        {
+            if (ch == HELLWAL_DELIM)
+            {
+                p->pos -= 1;  
+                char *delim_buf = NULL;
+
+                if (hell_parser_delim_buffer_between(p, HELLWAL_DELIM, HELLWAL_DELIM_COUNT, &delim_buf) == HELL_PARSER_OK)
+                {
+                    hell_parser_t *pd = hell_parser_create(delim_buf);
+                    if (pd == NULL)
+                        err("Failed to allocate parser");
+
+                    if (hell_parser_delim(pd, '=', 1) == HELL_PARSER_OK) {
+                        size_t var_size = pd->pos - 1;
+                        size_t val_size = pd->length - pd->pos + 1;
+
+                        char *variable = calloc(1, var_size);
+                        char *value = calloc(1, val_size);
+
+                        strncpy(variable, pd->input, var_size);
+                        strncpy(value, pd->input + pd->pos + 1, val_size);
+
+                        remove_whitespaces(variable);
+                        remove_whitespaces(value);
+
+                        RGB p;
+                        if (hex_to_rgb(value, &p))
+                        {
+                            int idx = is_color_palette_var(variable);
+                            if (idx != -1) {
+                                pal->colors[idx] = p;
+                                processed_colors++;
+                            }
+                        }
+                        else
+                        {
+                            free(variable);
+                            free(value);
+                        }
+                    }
+
+                    free(delim_buf);
+                }
+            }
+        }
+    }
+    hell_parser_destroy(p);
+
+    if (processed_colors == PALETTE_SIZE)
+        return 1;
+    if (processed_colors > 0)
+        free(pal);
+
+    return 0;
+}
+
+PALETTE process_themeing(char *theme)
+{
+    char *t = load_theme(theme);
+    PALETTE pal;
+
+    if (t!=NULL)
+        if (process_theme(t, &pal))
+            return pal;
+        else
+            err("Not enough colors were specified in color palette: %s", theme);
+    else
+        err("Theme not found: %s", theme);
+
+    return pal;
+}
+
 /***
  * MAIN
  ***/
@@ -1015,24 +1192,23 @@ int main(int argc, char **argv)
     if (set_args(argc,argv) != 0)
         err("arguments error");
 
-    log_c("Loading image %s", IMAGE_ARG);
-    IMG *img = img_load(IMAGE_ARG);
-    log_c("Loaded!");
+    PALETTE pal;
 
-    log_c("Generating color palette...");
-    PALETTE pal = gen_palette(img);
+    if (THEME_ARG)
+        pal = process_themeing(THEME_ARG); /* if true, program end's here */
+    else
+    {
+        IMG *img = img_load(IMAGE_ARG);
+        pal = gen_palette(img);
+        img_free(img);
+    }
+
+    if (LIGHT_ARG != NULL && DARK_ARG == NULL)
+        reverse_palette(&pal);
+
     palette_print(pal);
-    log_c("...Generated!\n");
-
-
-    log_c("Setting terminals...");
     set_term_colors(pal);
-    log_c("...All set!\n");
+    process_templating(pal);
 
-    log_c("Processing templates: ");
-    size_t t_count = process_templating(pal);
-    log_c("Sucessfully processed %d templates!", t_count);
-
-    img_free(img);
     return 0;
 }
