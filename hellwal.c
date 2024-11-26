@@ -159,9 +159,19 @@ char *THEME_FOLDER_ARG  = NULL;
 /* one palette as global variable, so log_c() can access colors */
 size_t pal_log_iter = 1;
 PALETTE pal_log = {
-    .colors[1].R = 255,
-    .colors[1].G = 69,
-    .colors[1].B = 255
+    .colors[1].R = 235,
+    .colors[1].G = 255,
+    .colors[1].B = 235
+ };
+PALETTE pal_log_err = {
+    .colors[1].R = 235,
+    .colors[1].G = 20,
+    .colors[1].B = 5
+ };
+PALETTE pal_log_warn = {
+    .colors[1].R = 235,
+    .colors[1].G = 255,
+    .colors[1].B = 10
  };
 
 
@@ -384,13 +394,17 @@ void eu(const char *format, ...)
 /* prints to stderr formatted output and exits with EXIT_FAILURE */
 void err(const char *format, ...)
 {
-    fprintf(stderr, "[ERROR]: ");
-
     va_list ap;
     va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
 
+    fprintf(stderr, "\033[38;2;%d;%d;%dm[ERROR]: ",
+            pal_log_err.colors[1].R,
+            pal_log_err.colors[1].G,
+            pal_log_err.colors[1].B);
+    vfprintf(stderr, format, ap);
+    fprintf(stderr, "\033[0m");
+
+    va_end(ap);
     fprintf(stderr, "\n");
 
     exit(EXIT_FAILURE);
@@ -399,13 +413,16 @@ void err(const char *format, ...)
 /* prints to stderr formatted output, but not exits */
 void warn(const char *format, ...)
 {
-    fprintf(stderr, "[WARNING]: ");
-
     va_list ap;
     va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
+    fprintf(stderr, "\033[38;2;%d;%d;%dm[WARN]: ",
+            pal_log_warn.colors[1].R,
+            pal_log_warn.colors[1].G,
+            pal_log_warn.colors[1].B);
 
+    vfprintf(stderr, format, ap);
+    fprintf(stderr, "\033[0m");
+    va_end(ap);
     fprintf(stderr, "\n");
 }
 
@@ -902,8 +919,6 @@ void process_template(TEMPLATE *t, PALETTE pal)
                     else if (!strcmp(delim_buf, "cursor"))
                         var_arg = palette_color(pal, 15, "%02x%02x%02x");
 
-                    log_c("AAAA: %s", delim_buf);
-
                     if (var_arg != NULL) {
                         len = strlen(var_arg);
                         template_size += len + 1;
@@ -1020,7 +1035,7 @@ size_t template_write(TEMPLATE *t, char *dir) {
     }
 
     fprintf(f, "%s", t->content);
-    log_c("  - wrote template to: %s", t->path);
+    log_c("  - wrote template to: %s\n", t->path);
 
     fclose(f);
     return 1;
@@ -1058,7 +1073,7 @@ char *load_theme(char *themename)
         }
     }
 
-    log_c("Theme not found in directory: \"%s\", trying as path");
+    //log_c("Theme not found in directory: \"%s\", trying as path");
 
     t = load_file(themename);
     if (t != NULL)
@@ -1181,6 +1196,8 @@ PALETTE process_themeing(char *theme)
     else
         err("Theme not found: %s", theme);
 
+    pal_log = pal;
+    pal_log_iter = 2;
     return pal;
 }
 
