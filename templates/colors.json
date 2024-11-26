@@ -3,9 +3,10 @@
     "alpha": "100",
 
     "special": {
-        "background": "#%%color0.hex%%",
-        "foreground": "#%%color15.hex%%",
-        "cursor": "#%%color15.hex%%"
+        "background": "#%%background%%",
+        "foreground": "#%%foreground%%",
+        "cursor": "#%%cursor%%",
+        "border": "#%%border%%"
     },
     "colors": {
         "color0": "#%%color0.hex%%",

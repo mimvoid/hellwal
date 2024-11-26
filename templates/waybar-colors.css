@@ -1,5 +1,7 @@
-@define-color foreground #%%color0.hex%%;
-@define-color background #%%color15.hex%%;
+@define-color background #%%background%%;
+@define-color foreground #%%foreground%%;
+@define-color cursor #%%cursor%%;
+@define-color border #%%border%%;
 
 @define-color color0 #%%color0.hex%%
 @define-color color1 #%%color1.hex%%;

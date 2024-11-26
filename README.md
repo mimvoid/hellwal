@@ -3,10 +3,12 @@
 - [ ] TODO: config ( is it really needed? )                               
 - [ ] TODO: support for other OS's like Mac or Win                        
 --------------------------------------------------------------------------
-- [x] TODO: support for already built themes (like gruvbox etc.)          
 - [x] TODO: tweaking options for generated colors (func + dark-light mode 
+- [x] TODO: support for already built themes (like gruvbox etc.)          
 - [x] TODO: do more pleasant color schemes                                
 - [x] TODO: print proper program usage                                    
+- [x] TODO: -r for random                                                 
+- [x] TODO: -s for scripts                                                
 - [x] TODO: gen. colors                                                   
 - [x] TODO: templating                                                    
 - [x] TODO: parsing                                                       
@@ -14,12 +16,13 @@
 ## How to use?
 
 Just run ``hellwal -i [image]`` with your image/wallpaper file, and you will get your colorscheme from templates in ~/.cache/hellwal/ or other specified directory.
+You can also run with ``-i <folder> -r`` - it will randomly pick image from directory.
 
 Look up for templating examples in ./templates folder, they look more-less like this:
 ```
 # Main
-background='%%color0.hex%%'
-foreground='%%color15.hex%%'
+background='%%background%%'
+foreground='%%foreground%%'
 
 # Path
 wallpaper_path='%%wallpaper%%'
@@ -80,6 +83,10 @@ hellwal -t ./themes/gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/
 You can select ``--dark`` or ``--light`` mode on every color palette, no matter if it's generated from image or from theme file. Remember that --dark is regular sorted array, and --light is just reversed so using this mode will not save you from flashbacks.
 
 But --light is really cool, I recommend to check it out :)
+
+### Scripts
+
+With ``--script`` or ``-s`` flag you can run script(or any shell command) after hellwal. Note that it will only run if hellwal will not encounter any errors
 
 # Special thanks:
 - [dylanaraps](https://github.com/dylanaraps) - for [https://github.com/dylanaraps/pywal](pywal) and other amazing stuff he created.

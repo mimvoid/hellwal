@@ -1,15 +1,24 @@
-/*  hellwal - v0.0.3 - MIT LICENSE
+/*  hellwal - v0.0.4 - MIT LICENSE
  *
  *  [ ] TODO: config ( is it really needed? )                               
  *  [ ] TODO: support for other OS's like Mac or Win                        
  *  ------------------------------------------------------------------------
- *  [x] TODO: support for already built themes (like gruvbox etc.)          
  *  [x] TODO: tweaking options for generated colors (func + dark-light mode 
+ *  [x] TODO: support for already built themes (like gruvbox etc.)          
  *  [x] TODO: do more pleasant color schemes                                
  *  [x] TODO: print proper program usage                                    
+ *  [x] TODO: -r for random                                                 
+ *  [x] TODO: -s for scripts                                                
  *  [x] TODO: gen. colors                                                   
  *  [x] TODO: templating                                                    
  *  [x] TODO: parsing                                                       
+ *
+ *  changelog v0.0.4:
+ *   - combined logging palletes into one
+ *   - support for --random (pics random image or template from specified directory)
+ *   - support for executing scripts after running hellwal
+ *   - added terminal template, adjusted colors.sh
+ *   - better --help
  *
  *  changelog v0.0.3:
  *   - removed TEMPLATE_ARG, OUTPUT_NAME_ARG - I've come to conclusion that it's useless.
@@ -28,6 +37,7 @@
  */
 
 
+#include <time.h>
 #include <glob.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -156,22 +166,36 @@ char *THEME_ARG = NULL;
 /* folder that contains static themes */
 char *THEME_FOLDER_ARG  = NULL;
 
-/* one palette as global variable, so log_c() can access colors */
+/* pick random THING (image or theme) of provided folder path:
+ *   - provide path to IMG using *IMAGE_ARG
+ *   - or *THEME_FOLDER_ARG
+ */
+char *RANDOM_ARG = NULL;
+
+/* run script after successfull hellwal job */
+char *SCRIPT_ARG = NULL;
+
+/* one palette as global variable, so log_c() can access colors
+ * 1 = log
+ * 2 = err
+ * 3 = warn
+ * */
 size_t pal_log_iter = 1;
 PALETTE pal_log = {
+    /* log */
     .colors[1].R = 235,
     .colors[1].G = 255,
-    .colors[1].B = 235
- };
-PALETTE pal_log_err = {
-    .colors[1].R = 235,
-    .colors[1].G = 20,
-    .colors[1].B = 5
- };
-PALETTE pal_log_warn = {
-    .colors[1].R = 235,
-    .colors[1].G = 255,
-    .colors[1].B = 10
+    .colors[1].B = 235,
+
+    /* warn */
+    .colors[2].R = 235,
+    .colors[2].G = 255,
+    .colors[2].B = 10,
+
+    /* err */
+    .colors[3].R = 235,
+    .colors[3].G = 20,
+    .colors[3].B = 5
  };
 
 
@@ -183,6 +207,7 @@ PALETTE pal_log_warn = {
 int set_args(int argc, char *argv[]);
 
 /* utils */
+char *rand_file(char *path);
 void check_output_dir(char *path);
 void hellwal_usage(const char *name);
 char* home_full_path(const char* path);
@@ -198,26 +223,29 @@ IMG *img_load(char *filename);
 void img_free(IMG *img);
 
 /* RGB */
+float calculate_luminance(RGB c);
 float calculate_color_distance(RGB a, RGB b);
 
 int is_color_palette_var(char *name);
 int is_valid_luminance(float luminance);
 int is_hex_to_rgb(const char *hex, RGB *p);
+int compare_luminance(const void *a, const void *b);
 int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
 
+/* RGB */
 RGB darken_color(RGB color, float factor);
 RGB lighten_color(RGB color, float factor);
 RGB saturate_color(RGB color, float factor);
 
+/* term */
+void set_term_colors(PALETTE pal);
+
 /* palettes */
 PALETTE gen_palette(IMG *img);
-float calculate_luminance(RGB c);
-int compare_luminance(const void *a, const void *b);
-char *palette_color(PALETTE pal, unsigned c, char *fmt);
 void palette_print(PALETTE pal);
-void set_term_colors(PALETTE pal);
 void reverse_palette(PALETTE *palette);
 void sort_palette_by_luminance(PALETTE *palette);
+char *palette_color(PALETTE pal, unsigned c, char *fmt);
 
 /* templates */
 char *load_file(char *filename);
@@ -245,6 +273,8 @@ void hellwal_usage(const char *name)
     printf("  --light,           -l             Set light mode\n\n");
 
     printf("  --quiet,           -q             Set silent output\n\n");
+    printf("  --script,          -s             Set script to execute after helwal\n\n");
+    printf("  --random,          -r             Set directory and pick random image or theme\n\n");
 
     printf("  --template-folder, -f <folder>    Set template folder.\n");
     printf("  --output,          -o <folder>    Set output folder for generated templates\n\n");
@@ -256,14 +286,18 @@ void hellwal_usage(const char *name)
 
     printf("\n\nDetailed: \n");
     printf("  --image: image path, which will be used to create color palette\n\n");
-    printf("  --dark: colors go brrrr (#000000)\n\n");
-    printf("  --light: colors go ffffff (#ffffff)\n\n");
-    printf("  --quiet: \n\n"); /* XD */
 
-    printf("  --template-folder: folder which contains templates to process to generate colors ; default one is ~/.config/hellwal/templates \n\n");
+    printf("  --dark: colors go brrrr (#000000)\n");
+    printf("  --light: colors go ffffff (#ffffff)\n\n");
+
+    printf("  --quiet: \n"); /* XD */
+    printf("  --script: provide script path and execute, it also can be shell command\n");
+    printf("  --random: pick random image or theme. You specify directory by writing it to --image or --theme-folder\n\n");
+
+    printf("  --template-folder: folder which contains templates to process to generate colors ; default one is ~/.config/hellwal/templates \n");
     printf("  --output: output folder where generated templates will be saved, default one is set to ~/.cache/hellwal/\n\n");
 
-    printf("  --theme: name of theme in theme folder OR (in case was not found) path to theme file\n\n");
+    printf("  --theme: name of theme in theme folder OR (in case was not found) path to theme file\n");
     printf("  --theme-folder: folder that contains themes, default one is set to ~/.config/hellwal/themes/\n");
 }
 
@@ -285,8 +319,7 @@ int set_args(int argc, char *argv[])
         {
             if (i + 1 < argc)
                 TEMPLATE_FOLDER_ARG = argv[++i];
-            else
-            {
+            else {
                 argc = -1;
             }
         }
@@ -294,8 +327,7 @@ int set_args(int argc, char *argv[])
         {
             if (i + 1 < argc)
                 IMAGE_ARG = argv[++i];
-            else
-            {
+            else {
                 argc = -1;
             }
         }
@@ -314,12 +346,16 @@ int set_args(int argc, char *argv[])
             /* anything other than NULL, makes light mode */
             LIGHT_ARG = "";
         }
+        else if ((strcmp(argv[i], "--random") == 0 || strcmp(argv[i], "-r") == 0))
+        {
+            /* anything other than NULL, triggers */
+            RANDOM_ARG = "";
+        }
         else if ((strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0))
         {
             if (i + 1 < argc)
                 OUTPUT_ARG = argv[++i];
-            else
-            {
+            else {
                 argc = -1;
             }
         }
@@ -327,8 +363,7 @@ int set_args(int argc, char *argv[])
         {
             if (i + 1 < argc)
                 THEME_ARG = argv[++i];
-            else
-            {
+            else {
                 argc = -1;
             }
         }
@@ -336,32 +371,52 @@ int set_args(int argc, char *argv[])
         {
             if (i + 1 < argc)
                 THEME_FOLDER_ARG = argv[++i];
-            else
-            {
+            else {
                 argc = -1;
             }
         }
-        else
+        else if ((strcmp(argv[i], "--script") == 0 || strcmp(argv[i], "-s") == 0))
         {
+            if (i + 1 < argc)
+                SCRIPT_ARG = argv[++i];
+            else
+                argc = -1;
+        }
+        else {
             eu("Unknown option: %s", argv[i]);
         }
     }
 
     if (argc == -1)
-        eu("Incomplete option: %s", argv[j]);
+        err("Incomplete option: %s", argv[j]);
 
-    /* handle needed arguments */
-    if (IMAGE_ARG == NULL && THEME_ARG == NULL && THEME_FOLDER_ARG == NULL)
-        err("You have to provide --image, or --theme");
+    /* handle needed arguments and warns - idk how to do this the other way */
+    if (RANDOM_ARG != NULL && (THEME_FOLDER_ARG == NULL && IMAGE_ARG == NULL))
+        err("you have to specify --image to provide image folder or --theme-folder to use RANDOM");
 
-    if (IMAGE_ARG == NULL && THEME_ARG == NULL && THEME_FOLDER_ARG != NULL)
-        err("You have to provide theme name or path");
+    if (IMAGE_ARG == NULL && THEME_ARG == NULL && ((THEME_FOLDER_ARG == NULL || TEMPLATE_FOLDER_ARG == NULL) && RANDOM_ARG == NULL))
+        err("You have to provide one of these:\n\t--image, \n\t--theme, \n\t--random");
 
-    if (THEME_ARG  == NULL && THEME_FOLDER_ARG != NULL)
-        warn("specified theme folder is not used: \"%s\"", THEME_FOLDER_ARG);
+    if (THEME_ARG != NULL && IMAGE_ARG != NULL)
+        err("you cannot use both --image and --theme");
 
-    if (THEME_ARG  != NULL && IMAGE_ARG != NULL)
-        err("you cannot use both --image and --theme:");
+    if (THEME_FOLDER_ARG != NULL && TEMPLATE_FOLDER_ARG != NULL)
+        err("you cannot use both --template-folder and --theme-folder");
+
+    if (RANDOM_ARG != NULL && THEME_ARG != NULL)
+        warn("specified theme is not used: \"%s\"", THEME_ARG);
+
+    if (THEME_ARG == NULL && THEME_FOLDER_ARG != NULL && RANDOM_ARG == NULL)
+        warn("specified theme folder is not used: \"%s\", you have to provide --theme", THEME_FOLDER_ARG);
+
+    /* if RANDOM, get file */
+    if (RANDOM_ARG != NULL)
+    {
+        if (IMAGE_ARG != NULL)
+            IMAGE_ARG = rand_file(IMAGE_ARG);
+        else
+            THEME_ARG = rand_file(THEME_FOLDER_ARG);
+    }
 
     /* If not specified, set default ones */
     SET_DEF(OUTPUT_ARG, "~/.cache/hellwal/");
@@ -377,14 +432,17 @@ int set_args(int argc, char *argv[])
  */
 void eu(const char *format, ...)
 {
-    fprintf(stderr, "[ERROR]: ");
+    fprintf(stderr, "\033[38;2;%d;%d;%dm[ERROR]: ",
+            pal_log.colors[3].R,
+            pal_log.colors[3].G,
+            pal_log.colors[3].B);
 
     va_list ap;
     va_start(ap, format);
     vfprintf(stderr, format, ap);
     va_end(ap);
 
-    fprintf(stderr, "\n");
+    fprintf(stderr, "\033[0m\n");
 
     hellwal_usage("hellwal");
 
@@ -398,9 +456,9 @@ void err(const char *format, ...)
     va_start(ap, format);
 
     fprintf(stderr, "\033[38;2;%d;%d;%dm[ERROR]: ",
-            pal_log_err.colors[1].R,
-            pal_log_err.colors[1].G,
-            pal_log_err.colors[1].B);
+            pal_log.colors[3].R,
+            pal_log.colors[3].G,
+            pal_log.colors[3].B);
     vfprintf(stderr, format, ap);
     fprintf(stderr, "\033[0m");
 
@@ -416,9 +474,9 @@ void warn(const char *format, ...)
     va_list ap;
     va_start(ap, format);
     fprintf(stderr, "\033[38;2;%d;%d;%dm[WARN]: ",
-            pal_log_warn.colors[1].R,
-            pal_log_warn.colors[1].G,
-            pal_log_warn.colors[1].B);
+            pal_log.colors[2].R,
+            pal_log.colors[2].G,
+            pal_log.colors[2].B);
 
     vfprintf(stderr, format, ap);
     fprintf(stderr, "\033[0m");
@@ -452,7 +510,6 @@ void log_c(const char *format, ...)
         pal_log_iter = 2;
 }
 
-
 /* get full path from '~/' or other relative paths */
 char* home_full_path(const char* path)
 {
@@ -483,6 +540,65 @@ void check_output_dir(char *path)
         mkdir(path, 0700);
 }
 
+/* run script from given path */
+void run_script(const char *script)
+{
+    if (script == NULL)
+        return;
+
+    log_c("Starting script: %s", script);
+    size_t exit_code = system(script);
+    if (exit_code == 0)
+        log_c("Script \"%s\" exited with code: %d", script, exit_code);
+    else
+        err("Script \"%s\" exited with code: %d", script, exit_code);
+}
+
+
+/* get random file from given path */
+char *rand_file(char *path)
+{
+    DIR *dir = opendir(path);
+    if (dir == NULL)
+        err("Cannot access directory %s: ", path);
+
+    struct dirent *entry;
+    char **files = NULL;
+    size_t count = 0;
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG)
+        {
+            files = realloc(files, sizeof(char *) * (count + 1));
+            if (files == NULL)
+            {
+                perror("Memory allocation failed");
+                closedir(dir);
+                return NULL;
+            }
+            files[count++] = strdup(entry->d_name);
+        }
+    }
+    closedir(dir);
+
+    if (count == 0) {
+        free(files);
+        err("No files found in directory: %s\n", path);
+    }
+
+    srand(time(NULL));
+    size_t r_idx = rand() % count;
+    char *choosen = calloc(1, strlen(path) + strlen(files[r_idx] + 2));
+    sprintf(choosen, "%s/%s", path, strdup(files[r_idx]));
+
+    for (size_t i = 0; i < count; i++)
+        free(files[i]);
+    free(files);
+
+    return choosen;
+}
+
+/* removes whitespaces from buffer */
 void remove_whitespaces(char *str)
 {
     if (!str) return;
@@ -873,17 +989,18 @@ void process_template(TEMPLATE *t, PALETTE pal)
 
                     if (hell_parser_delim(pd, '.', 1) == HELL_PARSER_OK) {
                         size_t l_size = pd->pos - 1;
-                        size_t r_size = pd->length - pd->pos + 1;
+                        size_t r_size = pd->length - pd->pos;
 
                         char *left  = calloc(1, l_size);
                         char *right = calloc(1, r_size);
 
                         strncpy(left, pd->input, l_size);
-                        strncpy(right, pd->input + pd->pos + 1, r_size);
+                        strncpy(right, pd->input + pd->pos, r_size);
 
                         remove_whitespaces(left);
                         remove_whitespaces(right);
 
+                        // TODO: fix - other keywords with '.hex' or '.rgb' cannot be detected
                         idx = is_color_palette_var(left);
                         if (idx != -1 && pd->pos + 1 < pd->length)
                         {
@@ -896,28 +1013,48 @@ void process_template(TEMPLATE *t, PALETTE pal)
                             else
                                 var_arg = palette_color(pal, idx, "%02x%02x%02x");
                         }
+                        else if (!strcmp(delim_buf, "foreground") || !strcmp(delim_buf, "cursor") || !strcmp(delim_buf, "border"))
+                        {
+                            if (!strcmp(right, "rgb"))
+                                var_arg = palette_color(pal, 15, "%d, %d, %d");
+                            else
+                                var_arg = palette_color(pal, 15, "%02x%02x%02x");
+                        }
+                        else if (!strcmp(delim_buf, "background"))
+                        {
+                            if (!strcmp(right, "rgb"))
+                                var_arg = palette_color(pal, 0, "%d, %d, %d");
+                            else
+                                var_arg = palette_color(pal, 0, "%02x%02x%02x");
+                        }
+
                         free(left);
                         free(right);
                     }
-                    /* check if an argument stands for wallpaper path */
-                    else if (!strcmp(delim_buf, "wallpaper"))
+                    else if (!strcmp(delim_buf, "wallpaper")) /* check if an argument stands for wallpaper path */
                     {
                         if (IMAGE_ARG != NULL)
                         {
                             len = strlen(IMAGE_ARG);
                             var_arg = IMAGE_ARG;
                         }
+                        else if (THEME_ARG)
+                            var_arg = THEME_ARG;
                         else
                             var_arg = "";
                     }
-                    //* TODO: keywords not working except "wallpaper" */
-                    //* TODO: add rgb as an option for keywords */
-                    else if (!strcmp(delim_buf, "foregound"))
+                    else if (!strcmp(delim_buf, "foreground") || !strcmp(delim_buf, "cursor") || !strcmp(delim_buf, "border"))
                         var_arg = palette_color(pal, 15, "%02x%02x%02x");
                     else if (!strcmp(delim_buf, "background"))
                         var_arg = palette_color(pal, 0, "%02x%02x%02x");
-                    else if (!strcmp(delim_buf, "cursor"))
-                        var_arg = palette_color(pal, 15, "%02x%02x%02x");
+                    else
+                    {
+                        /* '.' was not found, try to find color, put hex by default on it */
+                        idx = is_color_palette_var(delim_buf);
+
+                        if (idx != -1)
+                                var_arg = palette_color(pal, idx, "%02x%02x%02x");
+                    }
 
                     if (var_arg != NULL) {
                         len = strlen(var_arg);
@@ -967,8 +1104,7 @@ TEMPLATE **get_template_structure_dir(const char *dir_path, size_t *_size)
     size_t size = 0;
 
     DIR *dir = opendir(dir_path);
-    if (dir == NULL)
-    {
+    if (dir == NULL) {
         warn("Cannot access directory: %s", dir_path);
         return NULL;
     }
@@ -1035,7 +1171,7 @@ size_t template_write(TEMPLATE *t, char *dir) {
     }
 
     fprintf(f, "%s", t->content);
-    log_c("  - wrote template to: %s\n", t->path);
+    log_c("  - wrote template to: %s\n", path);
 
     fclose(f);
     return 1;
@@ -1189,10 +1325,10 @@ PALETTE process_themeing(char *theme)
     PALETTE pal;
 
     if (t!=NULL)
-        if (process_theme(t, &pal))
-            return pal;
-        else
+    {
+        if (!process_theme(t, &pal))
             err("Not enough colors were specified in color palette: %s", theme);
+    }
     else
         err("Theme not found: %s", theme);
 
@@ -1226,6 +1362,8 @@ int main(int argc, char **argv)
     palette_print(pal);
     set_term_colors(pal);
     process_templating(pal);
+
+    run_script(SCRIPT_ARG);
 
     return 0;
 }
