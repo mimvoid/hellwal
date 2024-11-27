@@ -19,7 +19,7 @@ printf "\033]4;14;#%%color14.hex%%\033\\"
 printf "\033]4;15;#%%color15.hex%%\033\\"
 
 # Background
-printf "\033]11;#%%background%%\233\\";
+printf "\033]11;#%%background%%\033\\";
 
 # Foreground
 printf "\033]10;#%%foreground%%\033\\";

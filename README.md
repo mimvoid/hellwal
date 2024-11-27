@@ -69,7 +69,7 @@ For example - gruvbox theme:
 Save text above as file or take from this repo [./themes/gruvbox.hellwal](gruvbox) and just run hellwal:
 
 ``
-hellwal -theme ./themes/gruvbox.hellwal
+hellwal --theme ./themes/gruvbox.hellwal
 ``
 
 I recommend to put all themes to ~/.config/hellwal/themes folder, because from there you can just provide theme name, and it will pick it up automatically, without specifying path. Of course if you want, you can also set different theme-folder path. For example:

@@ -1,4 +1,4 @@
-/*  hellwal - v0.0.4 - MIT LICENSE
+/*  hellwal - v0.0.5 - MIT LICENSE
  *
  *  [ ] TODO: config ( is it really needed? )                               
  *  [ ] TODO: support for other OS's like Mac or Win                        
@@ -12,6 +12,12 @@
  *  [x] TODO: gen. colors                                                   
  *  [x] TODO: templating                                                    
  *  [x] TODO: parsing                                                       
+ *
+ *  changelog v0.0.5:
+ *  - fixed .hex, .rgb while using keyword like (background, foreground etc.)
+ *  - themes adjustments
+ *  - added rgb template
+ *  - changed directories errors to warn, to allow to use same variable as path
  *
  *  changelog v0.0.4:
  *   - combined logging palletes into one
@@ -45,6 +51,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <strings.h>
 #include <sys/stat.h>
 
@@ -986,7 +993,7 @@ void process_template(TEMPLATE *t, PALETTE pal)
                     hell_parser_t *pd = hell_parser_create(delim_buf);
                     if (pd == NULL)
                         err("Failed to allocate parser");
-
+                        
                     if (hell_parser_delim(pd, '.', 1) == HELL_PARSER_OK) {
                         size_t l_size = pd->pos - 1;
                         size_t r_size = pd->length - pd->pos;
@@ -1000,7 +1007,8 @@ void process_template(TEMPLATE *t, PALETTE pal)
                         remove_whitespaces(left);
                         remove_whitespaces(right);
 
-                        // TODO: fix - other keywords with '.hex' or '.rgb' cannot be detected
+                        log_c("%s | %s", left, right);
+
                         idx = is_color_palette_var(left);
                         if (idx != -1 && pd->pos + 1 < pd->length)
                         {
@@ -1013,14 +1021,14 @@ void process_template(TEMPLATE *t, PALETTE pal)
                             else
                                 var_arg = palette_color(pal, idx, "%02x%02x%02x");
                         }
-                        else if (!strcmp(delim_buf, "foreground") || !strcmp(delim_buf, "cursor") || !strcmp(delim_buf, "border"))
+                        else if (!strcmp(left, "foreground") || !strcmp(left, "cursor") || !strcmp(left, "border"))
                         {
                             if (!strcmp(right, "rgb"))
                                 var_arg = palette_color(pal, 15, "%d, %d, %d");
                             else
                                 var_arg = palette_color(pal, 15, "%02x%02x%02x");
                         }
-                        else if (!strcmp(delim_buf, "background"))
+                        else if (!strcmp(left, "background"))
                         {
                             if (!strcmp(right, "rgb"))
                                 var_arg = palette_color(pal, 0, "%d, %d, %d");
@@ -1133,7 +1141,7 @@ TEMPLATE **get_template_structure_dir(const char *dir_path, size_t *_size)
             }
             t_arr = new_t_arr;
 
-            t_arr[size] = calloc(sizeof(TEMPLATE), 1);
+            t_arr[size] = calloc(1 ,sizeof(TEMPLATE));
             t_arr[size]->path = full_path;
             t_arr[size]->name = strdup(entry->d_name);
 
@@ -1184,33 +1192,33 @@ char *load_theme(char *themename)
 {
     log_c("Loading static theme: %s", THEME_ARG);
     DIR *dir = opendir(THEME_FOLDER_ARG);
-    if (dir == NULL)
-        err("Cannot access directory: %s", THEME_FOLDER_ARG);
-
     char *t = NULL;
     struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL)
-    {
-        if (entry->d_type == DT_REG && strcmp(entry->d_name, themename) == 0)
-        {
-            size_t path_len = strlen(THEME_FOLDER_ARG) + strlen(entry->d_name) + 2; // +2 for '/' and '\0'
-            char *path = malloc(path_len);
-            if (path == NULL) {
-                perror("Failed to allocate memory for file path");
-                closedir(dir);
-                return NULL;
-            }
 
-            sprintf(path, "%s/%s", THEME_FOLDER_ARG, entry->d_name); 
-            t = load_file(path);
-            
-            if (t != NULL)
-                return t;
+    if (dir == NULL)
+        warn("Cannot access directory: %s", THEME_FOLDER_ARG);
+    else
+    {
+        while ((entry = readdir(dir)) != NULL)
+        {
+            if (entry->d_type == DT_REG && strcmp(entry->d_name, themename) == 0)
+            {
+                size_t path_len = strlen(THEME_FOLDER_ARG) + strlen(entry->d_name) + 2; // +2 for '/' and '\0'
+                char *path = malloc(path_len);
+                if (path == NULL) {
+                    perror("Failed to allocate memory for file path");
+                    closedir(dir);
+                    return NULL;
+                }
+
+                sprintf(path, "%s/%s", THEME_FOLDER_ARG, entry->d_name); 
+                t = load_file(path);
+                
+                if (t != NULL)
+                    return t;
+            }
         }
     }
-
-    //log_c("Theme not found in directory: \"%s\", trying as path");
-
     t = load_file(themename);
     if (t != NULL)
         return t;
