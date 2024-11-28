@@ -10,9 +10,9 @@ debug: hellwal.c
 clean:
 	rm hellwal
 
-pkg: clean
+pkg: hellwal
 	mkdir -p hellwal-$(VERSION)
-	cp -R LICENSE* Makefile README.md hellwal.c hellwal-$(VERSION)
+	cp -R LICENSE Makefile README.md hellwal.c hellwal-$(VERSION)
 	tar -caf hellwal-$(VERSION).tar.gz hellwal-$(VERSION)
 	rm -rf hellwal-$(VERSION)
 

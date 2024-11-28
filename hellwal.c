@@ -13,6 +13,11 @@
  *  [x] TODO: templating                                                    
  *  [x] TODO: parsing                                                       
  *
+ *  changelog v0.0.6:
+ *  - improved colors, gen_palette() function is re-designed
+ *  - added in ./assests example script how you can use hellwal
+ *  - removed colors.sh
+ *
  *  changelog v0.0.5:
  *  - fixed .hex, .rgb while using keyword like (background, foreground etc.)
  *  - themes adjustments
@@ -243,6 +248,10 @@ int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
 RGB darken_color(RGB color, float factor);
 RGB lighten_color(RGB color, float factor);
 RGB saturate_color(RGB color, float factor);
+RGB adjust_luminance(RGB color, float luminance_factor);
+
+RGB hsl_to_rgb(float h, float s, float l);
+void rgb_to_hsl(RGB color, float *h, float *s, float *l);
 
 /* term */
 void set_term_colors(PALETTE pal);
@@ -406,9 +415,6 @@ int set_args(int argc, char *argv[])
 
     if (THEME_ARG != NULL && IMAGE_ARG != NULL)
         err("you cannot use both --image and --theme");
-
-    if (THEME_FOLDER_ARG != NULL && TEMPLATE_FOLDER_ARG != NULL)
-        err("you cannot use both --template-folder and --theme-folder");
 
     if (RANDOM_ARG != NULL && THEME_ARG != NULL)
         warn("specified theme is not used: \"%s\"", THEME_ARG);
@@ -640,15 +646,24 @@ float calculate_color_distance(RGB a, RGB b) {
 /* ensure that new color is not too similar to existing colors in the palette */
 int is_color_too_similar(RGB *palette, int num_colors, RGB new_color) {
     for (int i = 0; i < num_colors; i++) {
-        if (calculate_color_distance(palette[i], new_color) < 30)
+        if (calculate_color_distance(palette[i], new_color) < 35)
             return 1;  // Color is too similar
+    }
+    return 0;
+}
+
+/* ensure that new color is not too odd to existing colors in the palette */
+int is_color_too_odd(RGB *palette, int num_colors, RGB new_color) {
+    for (int i = 0; i < num_colors; i++) {
+        if (calculate_color_distance(palette[i], new_color) > 120)
+            return 1;
     }
     return 0;
 }
 
 /* sort palette by luminance to spread out colors */
 void sort_palette_by_luminance(PALETTE *palette) {
-    qsort(palette->colors, PALETTE_SIZE, sizeof(RGB), compare_luminance);
+    qsort(palette->colors, 8, sizeof(RGB), compare_luminance);
 }
 
 /* compare two RGB colors */
@@ -692,6 +707,79 @@ RGB saturate_color(RGB color, float factor) {
     return color;
 }
 
+// Convert RGB to HSL
+void rgb_to_hsl(RGB color, float *h, float *s, float *l)
+{
+    float r = color.R / 255.0f;
+    float g = color.G / 255.0f;
+    float b = color.B / 255.0f;
+
+    float max = fmaxf(r, fmaxf(g, b));
+    float min = fminf(r, fminf(g, b));
+    float delta = max - min;
+
+    // Lightness
+    *l = (max + min) / 2.0f;
+
+    // Saturation
+    if (delta == 0) {
+        *s = 0;
+        *h = 0; // Undefined
+    } else {
+        *s = delta / (1.0f - fabsf(2.0f * *l - 1.0f));
+        if (max == r) {
+            *h = fmodf((g - b) / delta, 6.0f);
+        } else if (max == g) {
+            *h = (b - r) / delta + 2.0f;
+        } else {
+            *h = (r - g) / delta + 4.0f;
+        }
+        *h *= 60.0f;
+        if (*h < 0) *h += 360.0f;
+    }
+}
+
+// Convert HSL to RGB
+RGB hsl_to_rgb(float h, float s, float l)
+{
+    float c = (1.0f - fabsf(2.0f * l - 1.0f)) * s;
+    float x = c * (1.0f - fabsf(fmodf(h / 60.0f, 2.0f) - 1.0f));
+    float m = l - c / 2.0f;
+
+    float r = 0, g = 0, b = 0;
+    if (h >= 0 && h < 60) {
+        r = c;
+        g = x;
+    } else if (h >= 60 && h < 120) {
+        r = x;
+        g = c;
+    } else if (h >= 120 && h < 180) {
+        g = c;
+        b = x;
+    } else if (h >= 180 && h < 240) {
+        g = x;
+        b = c;
+    } else if (h >= 240 && h < 300) {
+        r = x;
+        b = c;
+    } else {
+        r = c;
+        b = x;
+    }
+
+    RGB rgb = {(unsigned char)((r + m) * 255), (unsigned char)((g + m) * 255), (unsigned char)((b + m) * 255)};
+    return rgb;
+}
+
+/* adjust luminance in HSL */
+RGB adjust_luminance(RGB color, float luminance_factor)
+{
+    float h, s, l;
+    rgb_to_hsl(color, &h, &s, &l);
+    l = fminf(1.0f, fmaxf(0.0f, l * luminance_factor));
+
+    return hsl_to_rgb(h, s, l);
+}
 
 /* function to reverse the palette, used when light mode is specified */
 void reverse_palette(PALETTE *palette)
@@ -705,7 +793,6 @@ void reverse_palette(PALETTE *palette)
     }
 }
 
-/* generate palette from given image */
 PALETTE gen_palette(IMG *img)
 {
     log_c("Generating color palette...");
@@ -714,47 +801,81 @@ PALETTE gen_palette(IMG *img)
     int num_colors = 0;
     int step = 3;
 
-    for (size_t i = 0; i < img->size; i += step) {
+    /* initial sampling to populate the first half of the palette */
+    for (size_t i = 0; i + 3 < img->size; i += step)
+    {
         RGB new_color = {img->pixels[i], img->pixels[i + 1], img->pixels[i + 2]};
-
         float luminance = calculate_luminance(new_color);
+
         if (!is_valid_luminance(luminance))
             continue;
 
-        if (!is_color_too_similar(p.colors, num_colors, new_color) && num_colors < PALETTE_SIZE) {
-            p.colors[num_colors++] = new_color; }
+        if (!is_color_too_similar(p.colors, num_colors, new_color) &&
+            !is_color_too_odd(p.colors, num_colors, new_color) && num_colors < PALETTE_SIZE / 2)
+        {
+            p.colors[num_colors++] = new_color;
+        }
 
-        if (num_colors >= PALETTE_SIZE) {
+        if (num_colors == PALETTE_SIZE / 2)
             break;
+    }
+
+    // additional sample points: include edges, corners, and various grid positions
+    size_t sample_points[] = {
+        0,                                    // Top-left corner (0, 0)
+        (img->height - 1) * img->width,      // Bottom-left corner (width * (height-1))
+        (img->height - 1) * img->width + (img->width - 1), // Bottom-right corner
+        (img->height / 2) * img->width + (img->width / 2), // Center of the image
+        (img->height / 4) * img->width + (img->width / 4), // Quarter mark
+        (img->height / 4) * img->width + 3 * (img->width / 4), // Quarter mark (right)
+        3 * (img->height / 4) * img->width + (img->width / 4), // Three-quarters mark (left)
+        3 * (img->height / 4) * img->width + 3 * (img->width / 4), // Three-quarters mark (right)
+        (img->height / 8) * img->width + (img->width / 8), // 1/8 of the way across
+        (7 * img->height / 8) * img->width + (7 * img->width / 8), // 7/8 of the way across
+        (img->height / 16) * img->width + (img->width / 16), // 1/16 of the way across
+        (15 * img->height / 16) * img->width + (15 * img->width / 16) // 15/16 of the way across
+    };
+
+    // add samples from selected points to improve color diversity
+    for (size_t j = 0; j < sizeof(sample_points) / sizeof(sample_points[0]); j++)
+    {
+        size_t i = sample_points[j];
+        if (i + 3 >= img->size) break;
+
+        RGB new_color = {img->pixels[i], img->pixels[i + 1], img->pixels[i + 2]};
+        float luminance = calculate_luminance(new_color);
+
+        if (!is_valid_luminance(luminance))
+            continue;
+
+        if (!is_color_too_similar(p.colors, num_colors, new_color) &&
+            !is_color_too_odd(p.colors, num_colors, new_color) && num_colors < PALETTE_SIZE)
+        {
+            p.colors[num_colors++] = new_color;
         }
+
+        if (num_colors == PALETTE_SIZE)
+            break;
     }
 
-    /* if not enough colors found, keep adding random colors from the image */
-    while (num_colors < PALETTE_SIZE) {
-        RGB new_color = {img->pixels[(rand() % (img->size / 3)) * 3],
-                         img->pixels[(rand() % (img->size / 3)) * 3 + 1],
-                         img->pixels[(rand() % (img->size / 3)) * 3 + 2]};
-        p.colors[num_colors++] = new_color;
-    }
-
-    /* Adjust saturation for all colors except:
-     * [0]  - background
-     * [7]  - text
-     * [8]  - I don't know
-     * [15] - foreground
-     */
-    for (int i = 0; i < PALETTE_SIZE; i++) {
-        if (i != 0 && i != 7 && i != 8 && i != 15) {
-            p.colors[i] = saturate_color(p.colors[i], 0.60); /* TODO: load from config, args?? idk */
-        }
-    }
-
+    /* sort palette by luminance */
     sort_palette_by_luminance(&p);
 
-    p.colors[0] = darken_color(p.colors[0], 0.10);
-    p.colors[8] = darken_color(p.colors[8], 0.25);
-    p.colors[7] = lighten_color(p.colors[7], 0.45);
-    p.colors[15] = lighten_color(p.colors[15], 0.35);
+    for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++) {
+        p.colors[i] = lighten_color(p.colors[i - PALETTE_SIZE / 2], 1.2);
+        p.colors[i] = adjust_luminance(p.colors[i - PALETTE_SIZE / 2], 1.2);
+    }
+
+    /* adjust colors */
+    p.colors[0] = darken_color(p.colors[0], 0.15);
+    p.colors[7] = lighten_color(p.colors[7], 0.15);
+
+    /* TODO: config and cmdline arg Add as option ↓ */
+    //p.colors[0] = darken_color(p.colors[0], 1.15);  // 1.15, 0.15, 3.15 - Interesting
+    //p.colors[7] = lighten_color(p.colors[7], 1.15);  // Highlight text
+
+    //p.colors[0] = darken_color(p.colors[0], 3.15);  // 1.15, 0.15, 3.15 - Interesting
+    //p.colors[7] = lighten_color(p.colors[7], 1.15);  // Highlight text
 
     /* set output color palette for logs */
     pal_log = p;
@@ -952,7 +1073,7 @@ void process_template(TEMPLATE *t, PALETTE pal)
         t->content = NULL;
         return;
     }
-    log_c("  - generating template buffer: %s", t->name);
+    //log_c("  - generating template buffer: %s", t->name);
 
     char *template_buffer = calloc(1, 1);
     size_t template_size = 0;
@@ -1006,8 +1127,6 @@ void process_template(TEMPLATE *t, PALETTE pal)
 
                         remove_whitespaces(left);
                         remove_whitespaces(right);
-
-                        log_c("%s | %s", left, right);
 
                         idx = is_color_palette_var(left);
                         if (idx != -1 && pd->pos + 1 < pd->length)
@@ -1179,7 +1298,7 @@ size_t template_write(TEMPLATE *t, char *dir) {
     }
 
     fprintf(f, "%s", t->content);
-    log_c("  - wrote template to: %s\n", path);
+    //log_c("  - wrote template to: %s\n", path);
 
     fclose(f);
     return 1;
