@@ -1,4 +1,4 @@
-/*  hellwal - v0.0.5 - MIT LICENSE
+/*  hellwal - v0.0.7 - MIT LICENSE
  *
  *  [ ] TODO: config ( is it really needed? )                               
  *  [ ] TODO: support for other OS's like Mac or Win                        
