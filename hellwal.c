@@ -13,6 +13,11 @@
  *  [x] TODO: templating                                                    
  *  [x] TODO: parsing                                                       
  *
+ *  changelog v0.0.7:
+ *  - improved colors, gen_palette() function is re-designed (again)
+ *  - changed wallpaper gen_palette algorithm to median cut
+ *  - fixed some templates
+ *
  *  changelog v0.0.6:
  *  - improved colors, gen_palette() function is re-designed
  *  - added in ./assests example script how you can use hellwal
@@ -248,10 +253,14 @@ int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
 RGB darken_color(RGB color, float factor);
 RGB lighten_color(RGB color, float factor);
 RGB saturate_color(RGB color, float factor);
-RGB adjust_luminance(RGB color, float luminance_factor);
-
 RGB hsl_to_rgb(float h, float s, float l);
+RGB adjust_luminance(RGB color, float luminance_factor);
+RGB average_color(RGB *colors, size_t start, size_t end);
+
+float color_distance(RGB color1, RGB color2);
+int get_channel(RGB *colors, size_t start, size_t end, int channel);
 void rgb_to_hsl(RGB color, float *h, float *s, float *l);
+void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes);
 
 /* term */
 void set_term_colors(PALETTE pal);
@@ -707,7 +716,7 @@ RGB saturate_color(RGB color, float factor) {
     return color;
 }
 
-// Convert RGB to HSL
+/* Convert RGB to HSL */
 void rgb_to_hsl(RGB color, float *h, float *s, float *l)
 {
     float r = color.R / 255.0f;
@@ -739,7 +748,7 @@ void rgb_to_hsl(RGB color, float *h, float *s, float *l)
     }
 }
 
-// Convert HSL to RGB
+/* Convert HSL to RGB */
 RGB hsl_to_rgb(float h, float s, float l)
 {
     float c = (1.0f - fabsf(2.0f * l - 1.0f)) * s;
@@ -793,97 +802,191 @@ void reverse_palette(PALETTE *palette)
     }
 }
 
+/* Get channel */
+int get_channel(RGB *colors, size_t start, size_t end, int channel)
+{
+    uint8_t min = 255, max = 0;
+    for (size_t i = start; i < end; i++) {
+        uint8_t value = ((uint8_t *)&colors[i])[channel];
+        if (value < min) min = value;
+        if (value > max) max = value;
+    }
+    return max - min;
+}
+
+size_t partition_colors(RGB *colors, size_t start, size_t end, int channel, uint8_t pivot)
+{
+    size_t left = start, right = end - 1;
+    while (left <= right)
+    {
+        while (((uint8_t *)&colors[left])[channel] <= pivot && left < end) left++;
+        while (((uint8_t *)&colors[right])[channel] > pivot && right > start) right--;
+        if (left < right)
+        {
+            RGB temp = colors[left];
+            colors[left] = colors[right];
+            colors[right] = temp;
+        }
+    }
+    return left;
+}
+
+/* Median Cut Algo */
+void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes) 
+{
+    while (*num_boxes < target_boxes)
+    {
+        size_t largest_segment_index = 0;
+        int largest_range = 0;
+
+        for (size_t i = 0; i < *num_boxes; i++)
+        {
+            size_t start = starts[i];
+            size_t end = ends[i];
+            int range_r = get_channel(colors, start, end, 0);
+            int range_g = get_channel(colors, start, end, 1);
+            int range_b = get_channel(colors, start, end, 2);
+            int max_range = fmax(range_r, fmax(range_g, range_b));
+            if (max_range > largest_range) {
+                largest_range = max_range;
+                largest_segment_index = i;
+            }
+        }
+
+        size_t start = starts[largest_segment_index];
+        size_t end = ends[largest_segment_index];
+        int channel = (largest_range == get_channel(colors, start, end, 0)) ? 0 :
+                      (largest_range == get_channel(colors, start, end, 1)) ? 1 : 2;
+
+        size_t mid = (end - start) / 2;
+        uint8_t pivot = ((uint8_t *)&colors[start + mid])[channel];
+
+        size_t median = partition_colors(colors, start, end, channel, pivot);
+
+        // Update the segments
+        starts[largest_segment_index] = start;
+        ends[largest_segment_index] = median;
+        starts[*num_boxes] = median;
+        ends[*num_boxes] = end;
+        (*num_boxes)++;
+    }
+}
+
+/* Get the average color of a segment */
+RGB average_color(RGB *colors, size_t start, size_t end)
+{
+    uint64_t sum_r = 0, sum_g = 0, sum_b = 0;
+    size_t count = end - start;
+
+    if (count == 0) return (RGB){0, 0, 0};
+
+    for (size_t i = start; i < end; i++) {
+        sum_r += colors[i].R;
+        sum_g += colors[i].G;
+        sum_b += colors[i].B;
+    }
+
+    return (RGB){
+        .R = (uint8_t)(sum_r / count + 1),
+        .G = (uint8_t)(sum_g / count + 1),
+        .B = (uint8_t)(sum_b / count + 1)
+    };
+}
+
+float color_distance(RGB color1, RGB color2)
+{
+    return sqrt(pow(color1.R - color2.R, 2) +
+                pow(color1.G - color2.G, 2) +
+                pow(color1.B - color2.B, 2));
+}
+
+/* Ensure a color is sufficiently distinct from a reference color */
+RGB ensure_color_distance(RGB color, RGB reference, float min_distance)
+{
+    float distance = color_distance(color, reference);
+
+    if (distance < min_distance) {
+        // Increase the distance by adjusting color components
+        float factor = (min_distance / distance);
+        color.R = fmin(color.R + (color.R - reference.R) * factor, 255);
+        color.G = fmin(color.G + (color.G - reference.G) * factor, 255);
+        color.B = fmin(color.B + (color.B - reference.B) * factor, 255);
+    }
+
+    return color;
+}
+
+/* Generate color palette */
+/* TODO: fix: sometimes almost half of palette is WHITE or BLACK. */
 PALETTE gen_palette(IMG *img)
 {
     log_c("Generating color palette...");
 
     PALETTE p;
     int num_colors = 0;
-    int step = 3;
+    float bg_distance = 50.0;
+    float fg_distance = 50.0;
+    RGB bg_color = {0, 0, 0};
+    RGB fg_color = {255, 255, 255};
 
-    /* initial sampling to populate the first half of the palette */
-    for (size_t i = 0; i + 3 < img->size; i += step)
+    RGB *all_colors = (RGB *)img->pixels;
+    size_t total_pixels = img->size / 3;
+
+    size_t starts[PALETTE_SIZE / 2] = {0};
+    size_t ends[PALETTE_SIZE / 2] = {total_pixels};
+    size_t num_boxes = 1;
+
+    median_cut(all_colors, starts, ends, &num_boxes, PALETTE_SIZE / 2);
+
+    for (size_t i = 0; i < PALETTE_SIZE / 2; i++)
     {
-        RGB new_color = {img->pixels[i], img->pixels[i + 1], img->pixels[i + 2]};
-        float luminance = calculate_luminance(new_color);
+        RGB avg_color = average_color(all_colors, starts[i], ends[i]);
 
-        if (!is_valid_luminance(luminance))
-            continue;
-
-        if (!is_color_too_similar(p.colors, num_colors, new_color) &&
-            !is_color_too_odd(p.colors, num_colors, new_color) && num_colors < PALETTE_SIZE / 2)
-        {
-            p.colors[num_colors++] = new_color;
-        }
-
-        if (num_colors == PALETTE_SIZE / 2)
-            break;
+        p.colors[num_colors] = ensure_color_distance(avg_color, bg_color, bg_distance);
+        p.colors[num_colors] = ensure_color_distance(p.colors[num_colors], fg_color, fg_distance);
+        num_colors++;
     }
 
-    // additional sample points: include edges, corners, and various grid positions
     size_t sample_points[] = {
-        0,                                    // Top-left corner (0, 0)
-        (img->height - 1) * img->width,      // Bottom-left corner (width * (height-1))
-        (img->height - 1) * img->width + (img->width - 1), // Bottom-right corner
-        (img->height / 2) * img->width + (img->width / 2), // Center of the image
-        (img->height / 4) * img->width + (img->width / 4), // Quarter mark
-        (img->height / 4) * img->width + 3 * (img->width / 4), // Quarter mark (right)
-        3 * (img->height / 4) * img->width + (img->width / 4), // Three-quarters mark (left)
-        3 * (img->height / 4) * img->width + 3 * (img->width / 4), // Three-quarters mark (right)
-        (img->height / 8) * img->width + (img->width / 8), // 1/8 of the way across
-        (7 * img->height / 8) * img->width + (7 * img->width / 8), // 7/8 of the way across
-        (img->height / 16) * img->width + (img->width / 16), // 1/16 of the way across
-        (15 * img->height / 16) * img->width + (15 * img->width / 16) // 15/16 of the way across
+        0,
+        (img->height - 1) * img->width,
+        (img->height - 1) * img->width + (img->width - 1),
+        (img->height / 2) * img->width + (img->width / 2),
+        (img->height / 4) * img->width + (img->width / 4),
+        (img->height / 4) * img->width + 3 * (img->width / 4),
+        3 * (img->height / 4) * img->width + (img->width / 4),
+        3 * (img->height / 4) * img->width + 3 * (img->width / 4)
     };
 
-    // add samples from selected points to improve color diversity
-    for (size_t j = 0; j < sizeof(sample_points) / sizeof(sample_points[0]); j++)
+    for (size_t j = 0; j < sizeof(sample_points) / sizeof(sample_points[0]) && num_colors < PALETTE_SIZE; j++)
     {
         size_t i = sample_points[j];
-        if (i + 3 >= img->size) break;
+        if (i + 3 >= img->size) continue;
 
         RGB new_color = {img->pixels[i], img->pixels[i + 1], img->pixels[i + 2]};
-        float luminance = calculate_luminance(new_color);
-
-        if (!is_valid_luminance(luminance))
-            continue;
-
-        if (!is_color_too_similar(p.colors, num_colors, new_color) &&
-            !is_color_too_odd(p.colors, num_colors, new_color) && num_colors < PALETTE_SIZE)
+        if (!is_color_too_similar(p.colors, num_colors, new_color))
         {
             p.colors[num_colors++] = new_color;
         }
-
-        if (num_colors == PALETTE_SIZE)
-            break;
     }
 
-    /* sort palette by luminance */
     sort_palette_by_luminance(&p);
 
     for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++) {
         p.colors[i] = lighten_color(p.colors[i - PALETTE_SIZE / 2], 1.2);
-        p.colors[i] = adjust_luminance(p.colors[i - PALETTE_SIZE / 2], 1.2);
+        //p.colors[i] = adjust_luminance(p.colors[i - PALETTE_SIZE / 2], 1.2);
     }
 
-    /* adjust colors */
     p.colors[0] = darken_color(p.colors[0], 0.15);
     p.colors[7] = lighten_color(p.colors[7], 0.15);
 
-    /* TODO: config and cmdline arg Add as option ↓ */
-    //p.colors[0] = darken_color(p.colors[0], 1.15);  // 1.15, 0.15, 3.15 - Interesting
-    //p.colors[7] = lighten_color(p.colors[7], 1.15);  // Highlight text
-
-    //p.colors[0] = darken_color(p.colors[0], 3.15);  // 1.15, 0.15, 3.15 - Interesting
-    //p.colors[7] = lighten_color(p.colors[7], 1.15);  // Highlight text
-
-    /* set output color palette for logs */
     pal_log = p;
     pal_log_iter = 2;
 
     log_c("...Generated!");
     return p;
 }
+
 
 /* Writes palete to stdout */
 void palette_print(PALETTE pal)

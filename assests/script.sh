@@ -4,7 +4,7 @@
 wallpaper_path=$HOME/pics/wallpapers
 
 # Run hellwal to generate templates and get color palette
-./hellwal --image $wallpaper_path --random
+./hellwal --image $wallpaper_path --random -f ./templates/
 
 # Optionally you can load theme
 #./hellwal -r -k ./themes/

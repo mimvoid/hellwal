@@ -3,7 +3,7 @@
 @define-color cursor #%%cursor%%;
 @define-color border #%%border%%;
 
-@define-color color0 #%%color0.hex%%
+@define-color color0 #%%color0.hex%%;
 @define-color color1 #%%color1.hex%%;
 @define-color color2 #%%color2.hex%%;
 @define-color color3 #%%color3.hex%%;
