@@ -7,7 +7,7 @@
 
 ## Installation
 
-Go to [releases](https://github.com/danihek/hellwal/releases) page and download an [hellwal](https://github.com/danihek/hellwal/releases/download/v1.0.0/hellwal) executable
+Go to [releases](https://github.com/danihek/hellwal/releases) page and download a [hellwal](https://github.com/danihek/hellwal/releases/download/v1.0.0/hellwal) executable
 
 ## Building
 
