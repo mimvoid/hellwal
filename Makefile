@@ -21,6 +21,5 @@ release: hellwal
 	mkdir -p release
 	cp hellwal release/
 	tar czf release/hellwal-v$(VERSION).tar.gz -C release hellwal
-	rm -rf release
 
 .PHONY: hellwal release clean install uninstall
