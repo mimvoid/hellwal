@@ -3,24 +3,11 @@
 <p align="center">
     <p>Showcase with <a href="https://github.com/danihek/Themecord">Themecord</a> and <a href="https://github.com/LGFae/swww">swww</a></p>
     <img src="https://github.com/user-attachments/assets/e46ab2c0-0c66-4275-859e-c4bf24056985" alt="Preview" width="500px">
-</p>
-
-- [ ] TODO: config ( is it really needed? )                               
-- [ ] TODO: support for other OS's like Mac or Win                        
---------------------------------------------------------------------------
-- [x] TODO: tweaking options for generated colors (func + dark-light mode 
-- [x] TODO: support for already built themes (like gruvbox etc.)          
-- [x] TODO: do more pleasant color schemes                                
-- [x] TODO: print proper program usage                                    
-- [x] TODO: -r for random                                                 
-- [x] TODO: -s for scripts                                                
-- [x] TODO: gen. colors                                                   
-- [x] TODO: templating                                                    
-- [x] TODO: parsing                                                       
+</p>                                             
 
 ## Installation
 
-Go to [releases](https://github.com/danihek/hellwal/releases) page and download an [hellwal](https://github.com/danihek/hellwal/releases/download/1.0.0/hellwal) executable
+Go to [releases](https://github.com/danihek/hellwal/releases) page and download an [hellwal](https://github.com/danihek/hellwal/releases/download/v1.0.0/hellwal) executable
 
 ## Building
 
@@ -114,6 +101,19 @@ With ``--script`` or ``-s`` flag you can run script(or any shell command) after 
 source ~/.cache/hellwal/variables.sh
 sh ~/.cache/hellwal/terminal.sh
 ```
+
+- [ ] TODO: config ( is it really needed? )                               
+- [ ] TODO: support for other OS's like Mac or Win                        
+--------------------------------------------------------------------------
+- [x] TODO: tweaking options for generated colors (func + dark-light mode 
+- [x] TODO: support for already built themes (like gruvbox etc.)          
+- [x] TODO: do more pleasant color schemes                                
+- [x] TODO: print proper program usage                                    
+- [x] TODO: -r for random                                                 
+- [x] TODO: -s for scripts                                                
+- [x] TODO: gen. colors                                                   
+- [x] TODO: templating                                                    
+- [x] TODO: parsing          
 
 # Special thanks:
 - [dylanaraps](https://github.com/dylanaraps) - for [https://github.com/dylanaraps/pywal](pywal) and other amazing stuff he created.
