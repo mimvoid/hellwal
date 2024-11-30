@@ -13,7 +13,7 @@ Go to [releases](https://github.com/danihek/hellwal/releases) page and download 
 
 Clone git repo, run make command and you are ready to go!
 
-``git clone https://github.com/danihek/hellwal && make``
+``git clone https://github.com/danihek/hellwal && cd hellwal  && make``
 
 ## How to use?
 
