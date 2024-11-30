@@ -1,4 +1,9 @@
-# hellwal - fast, extensible colorscheme generator
+# hellwal - fast, extensible color palette generator
+
+<p align="center">
+    <p>Showcase with <a href="https://github.com/danihek/Themecord">Themecord</a> and <a href="https://github.com/LGFae/swww">swww</a></p>
+    <img src="https://github.com/user-attachments/assets/e46ab2c0-0c66-4275-859e-c4bf24056985" alt="Preview" width="500px">
+</p>
 
 - [ ] TODO: config ( is it really needed? )                               
 - [ ] TODO: support for other OS's like Mac or Win                        
