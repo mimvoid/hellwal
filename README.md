@@ -13,11 +13,22 @@
 - [x] TODO: templating                                                    
 - [x] TODO: parsing                                                       
 
+## Installation
+
+Go to [releases](https://github.com/danihek/hellwal/releases) page and download an [hellwal](https://github.com/danihek/hellwal/releases/download/1.0.0/hellwal) executable
+
+## Building
+
+Clone git repo, run make command and you are ready to go!
+
+``git clone https://github.com/danihek/hellwal && make``
+
 ## How to use?
 
-Just run ``hellwal -i [image]`` with your image/wallpaper file, and you will get your colorscheme from templates in ~/.cache/hellwal/ or other specified directory.
+Just run ``hellwal -i [image]`` with your image/wallpaper file, and you will get your terminals colored, (if any)templates will be saved in ~/.cache/hellwal/ or other specified directory.
 You can also run with ``-i <folder> -r`` - it will randomly pick image from directory.
 
+## Templates
 Look up for templating examples in ./templates folder, they look more-less like this:
 ```
 # Main
@@ -36,16 +47,19 @@ color1='%%color1.hex%%'
 color15='%%color15.hex%%'
 ```
 
-You can set specific color by writing number a from 0 to 15, and output format by writing '.' after (eg. `.hex` in `colors0.hex` or `colors0.rgb`)
+You can set specific color by writing number from 0 to 15, and output format by writing '.' after (eg. `.hex` in `colors0.hex` or `.rgb` in `colors0.rgb` - in case you haven't provided arg after '.', default one is set to hex.)
 
 ### Available color template formats:
-- [x] ``.hex`` | ``ffffff``
-- [x] ``.rgb`` | ``r, g, b``
+
+| Type | Input      | Output  |
+|------|------------|---------|
+| hex  | color0.hex | ffffff  |
+| rgb  | color0.rgb | 0, 0, 0 |
 
 ## Themes
 You can set your own theme, re-run it anytime and apply to your config or other programs!
 
-For example - gruvbox theme:
+For example - set gruvbox theme in ~/.config/hellwal/themes/[name].hellwal:
 
 ```
 %% color0  = #282828 %%
@@ -72,7 +86,7 @@ Save text above as file or take from this repo [./themes/gruvbox.hellwal](gruvbo
 hellwal --theme ./themes/gruvbox.hellwal
 ``
 
-I recommend to put all themes to ~/.config/hellwal/themes folder, because from there you can just provide theme name, and it will pick it up automatically, without specifying path. Of course if you want, you can also set different theme-folder path. For example:
+I recommend to put all themes to ``~/.config/hellwal/themes folder``, because from there you can just provide theme name, and it will pick it up automatically, without specifying path. Of course if you want, you can also set different theme-folder path. For example:
 
 ``
 hellwal -t ./themes/gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/
@@ -87,6 +101,14 @@ But --light is really cool, I recommend to check it out :)
 ### Scripts
 
 With ``--script`` or ``-s`` flag you can run script(or any shell command) after hellwal. Note that it will only run if hellwal will not encounter any errors
+
+### On a side note:
+
+- if you want your new terminals to open with previusly specified theme, add ./templates/variables.sh ./templates/terminal.sh to your hellwal templates, then in .bash.rc add following lines:
+```
+source ~/.cache/hellwal/variables.sh
+sh ~/.cache/hellwal/terminal.sh
+```
 
 # Special thanks:
 - [dylanaraps](https://github.com/dylanaraps) - for [https://github.com/dylanaraps/pywal](pywal) and other amazing stuff he created.

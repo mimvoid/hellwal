@@ -1,4 +1,4 @@
-/*  hellwal - v0.0.7 - MIT LICENSE
+/*  hellwal - v0.0.8 - MIT LICENSE
  *
  *  [ ] TODO: config ( is it really needed? )                               
  *  [ ] TODO: support for other OS's like Mac or Win                        
@@ -12,6 +12,15 @@
  *  [x] TODO: gen. colors                                                   
  *  [x] TODO: templating                                                    
  *  [x] TODO: parsing                                                       
+ *
+ * changelog v1.0.0:
+ *  - first decent verision to release.
+ *  - combined couple of ways into one for generating colorpalette
+ *  - added bins to obtains more precise colors
+ *  - fixed: half of palette is no more white randomly
+ *  - get rid of unecessary functions
+ *
+ * ----------------------------------------------------------------------------------------------------
  *
  *  changelog v0.0.7:
  *  - improved colors, gen_palette() function is re-designed (again)
@@ -76,12 +85,9 @@
  * MACROS
  ***/
 
-/* it tells bounds of valid rgb values */
-#define MIN_BRIGHTNESS 50
-#define MAX_BRIGHTNESS 200
-
 /* just palette size */
 #define PALETTE_SIZE 16
+#define BINS 8
 
 /* set default value for global char* variables */
 #define SET_DEF(x, s) \
@@ -244,23 +250,29 @@ float calculate_luminance(RGB c);
 float calculate_color_distance(RGB a, RGB b);
 
 int is_color_palette_var(char *name);
-int is_valid_luminance(float luminance);
 int is_hex_to_rgb(const char *hex, RGB *p);
 int compare_luminance(const void *a, const void *b);
-int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
 
 /* RGB */
+float calculate_luminance(RGB c);
+float color_distance(RGB color1, RGB color2);
+float calculate_color_distance(RGB a, RGB b);
+
+int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
+int compare_luminance(const void *a, const void *b);
+
 RGB darken_color(RGB color, float factor);
+RGB hsl_to_rgb(float h, float s, float l);
 RGB lighten_color(RGB color, float factor);
 RGB saturate_color(RGB color, float factor);
-RGB hsl_to_rgb(float h, float s, float l);
-RGB adjust_luminance(RGB color, float luminance_factor);
-RGB average_color(RGB *colors, size_t start, size_t end);
-
-float color_distance(RGB color1, RGB color2);
+RGB adjust_luminance(RGB color, float factor);
+RGB bin_to_color(int r_bin, int g_bin, int b_bin);
+RGB average_color(IMG *img, size_t start, size_t end);
+RGB blend_colors(const RGB color1, const RGB color2, float blend_factor);
 int get_channel(RGB *colors, size_t start, size_t end, int channel);
+
 void rgb_to_hsl(RGB color, float *h, float *s, float *l);
-void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes);
+void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes) ;
 
 /* term */
 void set_term_colors(PALETTE pal);
@@ -638,45 +650,20 @@ void remove_whitespaces(char *str)
 }
 
 /* calculate how bright is color */
-float calculate_luminance(RGB c) {
+float calculate_luminance(RGB c)
+{
     return (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B); 
 }
 
-/* check if luminance is within a valid range  */
-int is_valid_luminance(float luminance) {
-    return luminance >= MIN_BRIGHTNESS && luminance <= MAX_BRIGHTNESS;
-}
-
-/* check Euclidean distance between two colors to ensure diversity */
-float calculate_color_distance(RGB a, RGB b) {
-    return sqrtf(powf(a.R - b.R, 2) + powf(a.G - b.G, 2) + powf(a.B - b.B, 2));
-}
-
-/* ensure that new color is not too similar to existing colors in the palette */
-int is_color_too_similar(RGB *palette, int num_colors, RGB new_color) {
-    for (int i = 0; i < num_colors; i++) {
-        if (calculate_color_distance(palette[i], new_color) < 35)
-            return 1;  // Color is too similar
-    }
-    return 0;
-}
-
-/* ensure that new color is not too odd to existing colors in the palette */
-int is_color_too_odd(RGB *palette, int num_colors, RGB new_color) {
-    for (int i = 0; i < num_colors; i++) {
-        if (calculate_color_distance(palette[i], new_color) > 120)
-            return 1;
-    }
-    return 0;
-}
-
 /* sort palette by luminance to spread out colors */
-void sort_palette_by_luminance(PALETTE *palette) {
+void sort_palette_by_luminance(PALETTE *palette)
+{
     qsort(palette->colors, 8, sizeof(RGB), compare_luminance);
 }
 
 /* compare two RGB colors */
-int compare_luminance(const void *a, const void *b) {
+int compare_luminance(const void *a, const void *b)
+{
     RGB *color_a = (RGB *)a;
     RGB *color_b = (RGB *)b;
 
@@ -691,24 +678,9 @@ int compare_luminance(const void *a, const void *b) {
         return 0;
 }
 
-/* darken a color */
-RGB darken_color(RGB color, float factor) {
-    color.R = (uint8_t)(color.R * factor);
-    color.G = (uint8_t)(color.G * factor);
-    color.B = (uint8_t)(color.B * factor);
-    return color;
-}
-
-/* lighten a color */
-RGB lighten_color(RGB color, float factor) {
-    color.R = (uint8_t)(255 - ((255 - color.R) * factor));
-    color.G = (uint8_t)(255 - ((255 - color.G) * factor));
-    color.B = (uint8_t)(255 - ((255 - color.B) * factor));
-    return color;
-}
-
 /* saturate a color */
-RGB saturate_color(RGB color, float factor) {
+RGB saturate_color(RGB color, float factor)
+{
     float max_val = fmaxf(color.R, fmaxf(color.G, color.B));
     color.R = (uint8_t)(color.R + (max_val - color.R) * factor);
     color.G = (uint8_t)(color.G + (max_val - color.G) * factor);
@@ -780,16 +752,6 @@ RGB hsl_to_rgb(float h, float s, float l)
     return rgb;
 }
 
-/* adjust luminance in HSL */
-RGB adjust_luminance(RGB color, float luminance_factor)
-{
-    float h, s, l;
-    rgb_to_hsl(color, &h, &s, &l);
-    l = fminf(1.0f, fmaxf(0.0f, l * luminance_factor));
-
-    return hsl_to_rgb(h, s, l);
-}
-
 /* function to reverse the palette, used when light mode is specified */
 void reverse_palette(PALETTE *palette)
 {
@@ -806,7 +768,8 @@ void reverse_palette(PALETTE *palette)
 int get_channel(RGB *colors, size_t start, size_t end, int channel)
 {
     uint8_t min = 255, max = 0;
-    for (size_t i = start; i < end; i++) {
+    for (size_t i = start; i < end; i++)
+    {
         uint8_t value = ((uint8_t *)&colors[i])[channel];
         if (value < min) min = value;
         if (value > max) max = value;
@@ -814,6 +777,91 @@ int get_channel(RGB *colors, size_t start, size_t end, int channel)
     return max - min;
 }
 
+/* check Euclidean distance between two colors to ensure diversity */
+float calculate_color_distance(RGB a, RGB b)
+{
+    return sqrtf(powf(a.R - b.R, 2) + powf(a.G - b.G, 2) + powf(a.B - b.B, 2));
+}
+
+/* ensure that new color is not too similar to existing colors in the palette */
+int is_color_too_similar(RGB *palette, int num_colors, RGB new_color)
+{
+    for (int i = 0; i < num_colors; i++)
+    {
+        if (calculate_color_distance(palette[i], new_color) < 35)
+            return 1;  // Color is too similar
+    }
+    return 0;
+}
+
+/* blend two colors together based on a blend factor */
+RGB blend_colors(const RGB color1, const RGB color2, float blend_factor)
+{
+    if (blend_factor < 0.0f) blend_factor = 0.0f;
+    if (blend_factor > 1.0f) blend_factor = 1.0f;
+
+    return (RGB){
+        .R = (uint8_t)((1.0f - blend_factor) * color1.R + blend_factor * color2.R),
+        .G = (uint8_t)((1.0f - blend_factor) * color1.G + blend_factor * color2.G),
+        .B = (uint8_t)((1.0f - blend_factor) * color1.B + blend_factor * color2.B)
+    };
+}
+
+/* calculate the average color of a given pixel range in an image */
+RGB average_color(IMG *img, size_t start, size_t end)
+{
+    uint64_t sum_r = 0, sum_g = 0, sum_b = 0;
+    size_t pixel_count = end - start;
+
+    for (size_t i = start; i < end; i++)
+    {
+        sum_r += img->pixels[i * 3];
+        sum_g += img->pixels[i * 3 + 1];
+        sum_b += img->pixels[i * 3 + 2];
+    }
+
+    return (RGB){
+        .R = (uint8_t)(sum_r / pixel_count),
+        .G = (uint8_t)(sum_g / pixel_count),
+        .B = (uint8_t)(sum_b / pixel_count)
+    };
+}
+
+/* convert bin indices to an rgb color */
+RGB bin_to_color(int r_bin, int g_bin, int b_bin)
+{
+    int bin_size = 256 / BINS;
+    return (RGB){
+        .R = (uint8_t)(r_bin * bin_size + bin_size / 2),
+        .G = (uint8_t)(g_bin * bin_size + bin_size / 2),
+        .B = (uint8_t)(b_bin * bin_size + bin_size / 2)
+    };
+}
+
+
+/* adjust luminance of a color */
+RGB adjust_luminance(RGB color, float factor)
+{
+    return (RGB){
+        .R = (uint8_t)fminf(color.R * factor, 255),
+        .G = (uint8_t)fminf(color.G * factor, 255),
+        .B = (uint8_t)fminf(color.B * factor, 255)
+    };
+}
+
+/* lighten a color by a factor */
+RGB lighten_color(RGB color, float factor)
+{
+    return adjust_luminance(color, 1.0f + factor);
+}
+
+/* darken a color by a factor */
+RGB darken_color(RGB color, float factor)
+{
+    return adjust_luminance(color, 1.0f - factor);
+}
+
+/* part of median algo */
 size_t partition_colors(RGB *colors, size_t start, size_t end, int channel, uint8_t pivot)
 {
     size_t left = start, right = end - 1;
@@ -831,7 +879,7 @@ size_t partition_colors(RGB *colors, size_t start, size_t end, int channel, uint
     return left;
 }
 
-/* Median Cut Algo */
+/* perform median cut to partition the color space */
 void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes) 
 {
     while (*num_boxes < target_boxes)
@@ -872,65 +920,12 @@ void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, si
     }
 }
 
-/* Get the average color of a segment */
-RGB average_color(RGB *colors, size_t start, size_t end)
-{
-    uint64_t sum_r = 0, sum_g = 0, sum_b = 0;
-    size_t count = end - start;
-
-    if (count == 0) return (RGB){0, 0, 0};
-
-    for (size_t i = start; i < end; i++) {
-        sum_r += colors[i].R;
-        sum_g += colors[i].G;
-        sum_b += colors[i].B;
-    }
-
-    return (RGB){
-        .R = (uint8_t)(sum_r / count + 1),
-        .G = (uint8_t)(sum_g / count + 1),
-        .B = (uint8_t)(sum_b / count + 1)
-    };
-}
-
-float color_distance(RGB color1, RGB color2)
-{
-    return sqrt(pow(color1.R - color2.R, 2) +
-                pow(color1.G - color2.G, 2) +
-                pow(color1.B - color2.B, 2));
-}
-
-/* Ensure a color is sufficiently distinct from a reference color */
-RGB ensure_color_distance(RGB color, RGB reference, float min_distance)
-{
-    float distance = color_distance(color, reference);
-
-    if (distance < min_distance) {
-        // Increase the distance by adjusting color components
-        float factor = (min_distance / distance);
-        color.R = fmin(color.R + (color.R - reference.R) * factor, 255);
-        color.G = fmin(color.G + (color.G - reference.G) * factor, 255);
-        color.B = fmin(color.B + (color.B - reference.B) * factor, 255);
-    }
-
-    return color;
-}
-
-/* Generate color palette */
-/* TODO: fix: sometimes almost half of palette is WHITE or BLACK. */
 PALETTE gen_palette(IMG *img)
 {
-    log_c("Generating color palette...");
-
-    PALETTE p;
-    int num_colors = 0;
-    float bg_distance = 50.0;
-    float fg_distance = 50.0;
-    RGB bg_color = {0, 0, 0};
-    RGB fg_color = {255, 255, 255};
-
-    RGB *all_colors = (RGB *)img->pixels;
+    PALETTE palette;
     size_t total_pixels = img->size / 3;
+    RGB *all_colors = (RGB *)img->pixels;
+    int num_colors = 0;
 
     size_t starts[PALETTE_SIZE / 2] = {0};
     size_t ends[PALETTE_SIZE / 2] = {total_pixels};
@@ -938,13 +933,54 @@ PALETTE gen_palette(IMG *img)
 
     median_cut(all_colors, starts, ends, &num_boxes, PALETTE_SIZE / 2);
 
+    int histogram[BINS][BINS][BINS] = {{{0}}};
+    for (size_t i = 0; i < total_pixels; i++)
+    {
+        uint8_t R = img->pixels[i * 3];
+        uint8_t G = img->pixels[i * 3 + 1];
+        uint8_t B = img->pixels[i * 3 + 2];
+
+        int r_bin = R / (256 / BINS);
+        int g_bin = G / (256 / BINS);
+        int b_bin = B / (256 / BINS);
+
+        histogram[r_bin][g_bin][b_bin]++;
+    }
+
+    typedef struct {
+        int count;
+        int r_bin, g_bin, b_bin;
+    } BinCount;
+
+    BinCount top_bins[(PALETTE_SIZE / 2)] = {0};
+
+    for (int r = 0; r < BINS; r++)
+    {
+        for (int g = 0; g < BINS; g++)
+        {
+            for (int b = 0; b < BINS; b++)
+            {
+                int count = histogram[r][g][b];
+                if (count > top_bins[(PALETTE_SIZE / 2) - 1].count)
+                {
+                    top_bins[(PALETTE_SIZE / 2) - 1] = (BinCount){count, r, g, b};
+                    for (int k = (PALETTE_SIZE / 2) - 1; k > 0 && top_bins[k].count > top_bins[k - 1].count; k--)
+                    {
+                        BinCount temp = top_bins[k];
+                        top_bins[k] = top_bins[k - 1];
+                        top_bins[k - 1] = temp;
+                    }
+                }
+            }
+        }
+    }
+
     for (size_t i = 0; i < PALETTE_SIZE / 2; i++)
     {
-        RGB avg_color = average_color(all_colors, starts[i], ends[i]);
+        RGB avg_color = average_color(img, starts[i], ends[i]);
+        RGB bin_color = bin_to_color(top_bins[i].r_bin, top_bins[i].g_bin, top_bins[i].b_bin);
 
-        p.colors[num_colors] = ensure_color_distance(avg_color, bg_color, bg_distance);
-        p.colors[num_colors] = ensure_color_distance(p.colors[num_colors], fg_color, fg_distance);
-        num_colors++;
+        palette.colors[num_colors++] = blend_colors(avg_color, bin_color, 0.5f);
     }
 
     size_t sample_points[] = {
@@ -958,35 +994,31 @@ PALETTE gen_palette(IMG *img)
         3 * (img->height / 4) * img->width + 3 * (img->width / 4)
     };
 
-    for (size_t j = 0; j < sizeof(sample_points) / sizeof(sample_points[0]) && num_colors < PALETTE_SIZE; j++)
-    {
+    for (size_t j = 0; j < sizeof(sample_points) / sizeof(sample_points[0]) && num_colors < PALETTE_SIZE; j++) {
         size_t i = sample_points[j];
         if (i + 3 >= img->size) continue;
 
         RGB new_color = {img->pixels[i], img->pixels[i + 1], img->pixels[i + 2]};
-        if (!is_color_too_similar(p.colors, num_colors, new_color))
+        if (!is_color_too_similar(palette.colors, num_colors, new_color))
         {
-            p.colors[num_colors++] = new_color;
+            palette.colors[num_colors++] = new_color;
+        }
+        else
+        {
+            palette.colors[num_colors++] = blend_colors(new_color, *palette.colors, 0.5);
         }
     }
 
-    sort_palette_by_luminance(&p);
+    sort_palette_by_luminance(&palette);
+    for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
+        palette.colors[i] = lighten_color(palette.colors[i - PALETTE_SIZE / 2], 0.25f);
 
-    for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++) {
-        p.colors[i] = lighten_color(p.colors[i - PALETTE_SIZE / 2], 1.2);
-        //p.colors[i] = adjust_luminance(p.colors[i - PALETTE_SIZE / 2], 1.2);
-    }
+    palette.colors[0] = darken_color(palette.colors[0], 0.7f); // BG
+    palette.colors[7] = lighten_color(palette.colors[7], 0.4f); // Term text
+    palette.colors[15] = lighten_color(palette.colors[15], 0.5f); // FG
 
-    p.colors[0] = darken_color(p.colors[0], 0.15);
-    p.colors[7] = lighten_color(p.colors[7], 0.15);
-
-    pal_log = p;
-    pal_log_iter = 2;
-
-    log_c("...Generated!");
-    return p;
+    return palette;
 }
-
 
 /* Writes palete to stdout */
 void palette_print(PALETTE pal)
