@@ -1,4 +1,4 @@
-/*  hellwal - v0.0.8 - MIT LICENSE
+/*  hellwal - v1.0.0 - MIT LICENSE
  *
  *  [ ] TODO: config ( is it really needed? )                               
  *  [ ] TODO: support for other OS's like Mac or Win                        
@@ -305,37 +305,33 @@ void hellwal_usage(const char *name)
 {
     printf("Usage:\n\t%s [OPTIONS]\n", name);
     printf("Options:\n");
-    printf("  --image,           -i <image>     Set image file.\n\n");
-    printf("  --dark,            -d             Set dark mode (ON by default)\n");
-    printf("  --light,           -l             Set light mode\n\n");
-
-    printf("  --quiet,           -q             Set silent output\n\n");
-    printf("  --script,          -s             Set script to execute after helwal\n\n");
-    printf("  --random,          -r             Set directory and pick random image or theme\n\n");
-
-    printf("  --template-folder, -f <folder>    Set template folder.\n");
-    printf("  --output,          -o <folder>    Set output folder for generated templates\n\n");
-
-    printf("  --theme,           -t <file>      Set theme from THEME FOLDER or (in case was not found) path to theme file\n");
-    printf("  --theme-folder,    -k <folder>    Set folder that contains themes\n\n");
-
+    printf("  --image,           -i <image>     Set image file.\n");
+    printf("  --dark,            -d             Set dark mode (ON by default).\n");
+    printf("  --light,           -l             Set light mode.\n");
+    printf("  --quiet,           -q             Suppress output.\n");
+    printf("  --script,          -s             Execute script after running hellwal.\n");
+    printf("  --random,          -r             Pick random image or theme from directory.\n");
+    printf("  --template-folder, -f <folder>    Set folder containing templates.\n");
+    printf("  --output,          -o <folder>    Set output folder for generated templates.\n");
+    printf("  --theme,           -t <file>      Set theme from theme folder or path to theme file.\n");
+    printf("  --theme-folder,    -k <folder>    Set folder containing themes.\n");
     printf("  --help,            -h             Display this help and exit.\n");
 
-    printf("\n\nDetailed: \n");
-    printf("  --image: image path, which will be used to create color palette\n\n");
+    printf("\nDetailed Description:\n");
+    printf("  --image: Path to the image used to create a color palette.\n");
+    printf("  --dark: Use dark mode colors (e.g., #000000).\n");
+    printf("  --light: Use light mode colors (e.g., #FFFFFF).\n");
+    printf("  --quiet: Suppress output messages.\n");
+    printf("  --script: Specify a script or shell command to execute after running hellwal.\n");
+    printf("  --random: Pick a random image or theme from a directory. Specify the directory using --image or --theme-folder.\n");
+    printf("  --template-folder: Folder containing templates to process for generating colors. Default: ~/.config/hellwal/templates.\n");
+    printf("  --output: Output folder for generated templates. Default: ~/.cache/hellwal/.\n");
+    printf("  --theme: Specify a theme name from the theme folder or provide a path to a theme file.\n");
+    printf("  --theme-folder: Folder containing themes. Default: ~/.config/hellwal/themes/.\n");
 
-    printf("  --dark: colors go brrrr (#000000)\n");
-    printf("  --light: colors go ffffff (#ffffff)\n\n");
-
-    printf("  --quiet: \n"); /* XD */
-    printf("  --script: provide script path and execute, it also can be shell command\n");
-    printf("  --random: pick random image or theme. You specify directory by writing it to --image or --theme-folder\n\n");
-
-    printf("  --template-folder: folder which contains templates to process to generate colors ; default one is ~/.config/hellwal/templates \n");
-    printf("  --output: output folder where generated templates will be saved, default one is set to ~/.cache/hellwal/\n\n");
-
-    printf("  --theme: name of theme in theme folder OR (in case was not found) path to theme file\n");
-    printf("  --theme-folder: folder that contains themes, default one is set to ~/.config/hellwal/themes/\n");
+    printf("\nNote for package manager installations:\n");
+    printf("Default templates and themes are pre-installed in /etc/hellwal/templates and /etc/hellwal/themes.\n");
+    printf("You can copy these to your configuration directory.\n");
 }
 
 /* set given arguments */
