@@ -7,7 +7,11 @@
 
 ## Installation
 
-Go to [releases](https://github.com/danihek/hellwal/releases) page and download a [hellwal](https://github.com/danihek/hellwal/releases/download/v1.0.0/hellwal) executable
+To install from **AUR**, run:
+
+``yay -S hellwal``
+
+Alternatively, visit the [releases](https://github.com/danihek/hellwal/releases) page and download the [hellwal](https://github.com/danihek/hellwal/releases/download/v1.0.0/hellwal) executable.
 
 ## Building
 
