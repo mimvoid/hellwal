@@ -11,21 +11,24 @@ To install from **AUR**, run:
 
 ``yay -S hellwal``
 
-Alternatively, visit the [releases](https://github.com/danihek/hellwal/releases) page and download the [hellwal](https://github.com/danihek/hellwal/releases/download/v1.0.0/hellwal) executable.
+Or get a binary: go to [releases](https://github.com/danihek/hellwal/releases) page and download the [hellwal](https://github.com/danihek/hellwal/releases/download/v1.0.0/hellwal) executable.
 
 ## Building
 
-Clone git repo, run make command and you are ready to go!
+Clone git repo, run make command and you are ready to go! - you just need C compiler and gnumake!
 
 ``git clone https://github.com/danihek/hellwal && cd hellwal  && make``
 
 ## How to use?
 
-Just run ``hellwal -i [image]`` with your image/wallpaper file, and you will get your terminals colored, (if any)templates will be saved in ~/.cache/hellwal/ or other specified directory.
-You can also run with ``-i <folder> -r`` - it will randomly pick image from directory.
+Just run ``hellwal -i [image]`` with your wallpaper - color palette will be generated, terminals colored, and if you have any templates in ~/.config/hellwal, they will be saved in ~/.cache/hellwal/ or other specified directory.
+You can also run with ``-i <folder> --random`` - it will randomly pick image from given directory.
 
 ## Templates
+
 Look up for templating examples in ./templates folder, they look more-less like this:
+**!![INFO]!!** - if you got hellwal from **AUR** you have default templates examples in `/usr/share/docs/`
+
 ```
 # Main
 background='%%background%%'
@@ -41,21 +44,32 @@ color1='%%color1.hex%%'
 # ... and so on and so fourth.
 
 color15='%%color15.hex%%'
+
+
+# RGB
+backgroundRGB='%%background.rgb%%'
+foregroundRGB='%%foreground.rgb%%'
+
+color15butRGB='%%color15.rgb%%'
+
 ```
 
-You can set specific color by writing number from 0 to 15, and output format by writing '.' after (eg. `.hex` in `colors0.hex` or `.rgb` in `colors0.rgb` - in case you haven't provided arg after '.', default one is set to hex.)
+You can get any generated color between 0-15 values.
+By writing '.' after keyword you can specify type: hex or rgb. If you havent specify this output of template will be in hex.
+
 
 ### Available color template formats:
 
 | Type | Input      | Output  |
 |------|------------|---------|
-| hex  | color0.hex | ffffff  |
+| hex  | color0.hex | 000000  |
 | rgb  | color0.rgb | 0, 0, 0 |
 
 ## Themes
-You can set your own theme, re-run it anytime and apply to your config or other programs!
 
-For example - set gruvbox theme in ~/.config/hellwal/themes/[name].hellwal:
+You can set your own theme, re-run it anytime and apply to your config or other programs!
+It can be previously generated palette from image, gruvbox, tokyonight or anything you want!
+For example gruvbox theme:
 
 ```
 %% color0  = #282828 %%
@@ -85,29 +99,40 @@ hellwal --theme ./themes/gruvbox.hellwal
 I recommend to put all themes to ``~/.config/hellwal/themes folder``, because from there you can just provide theme name, and it will pick it up automatically, without specifying path. Of course if you want, you can also set different theme-folder path. For example:
 
 ``
-hellwal -t ./themes/gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/
+hellwal -t gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/themes
 ``
 
 ### Modes
 
-You can select ``--dark`` or ``--light`` mode on every color palette, no matter if it's generated from image or from theme file. Remember that --dark is regular sorted array, and --light is just reversed so using this mode will not save you from flashbacks.
-
-But --light is really cool, I recommend to check it out :)
+You can select ``-d`` and ``--dark`` or ``-l`` and ``--light`` mode on every given image, theme etc, no matter if it's generated from image or from theme file.lashbacks.
 
 ### Scripts
 
-With ``--script`` or ``-s`` flag you can run script(or any shell command) after hellwal. Note that it will only run if hellwal will not encounter any errors
+With ``--script`` or ``-s`` you can run script(or any shell command) after hellwal.
+**Note**: it will only run if hellwal will not encounter any errors.
 
 ### On a side note:
 
-- if you want your new terminals to open with previusly specified theme, add ./templates/variables.sh ./templates/terminal.sh to your hellwal templates, then in .bash.rc add following lines:
+If you want your new terminals to open with previusly generated or specified color palette, add this templates to your ``~/.config/hellwal/templates/`` folder:
+    - variables.sh
+    - terminal.sh
+
+then in ``.bash.rc`` add following lines:
+
 ```
 source ~/.cache/hellwal/variables.sh
 sh ~/.cache/hellwal/terminal.sh
 ```
 
+### TODO
+
+- [ ] TODO: gtk css?
+- [ ] TODO: better light theme
 - [ ] TODO: config ( is it really needed? )                               
 - [ ] TODO: support for other OS's like Mac or Win                        
+- [ ] TODO: bright & dark offset value as cmd line argument               
+- [ ] TODO: cmd line arg to manipulate variety of different colors        
+- [ ] TODO: handle exception: unclosed delim
 --------------------------------------------------------------------------
 - [x] TODO: tweaking options for generated colors (func + dark-light mode 
 - [x] TODO: support for already built themes (like gruvbox etc.)          
@@ -117,7 +142,7 @@ sh ~/.cache/hellwal/terminal.sh
 - [x] TODO: -s for scripts                                                
 - [x] TODO: gen. colors                                                   
 - [x] TODO: templating                                                    
-- [x] TODO: parsing          
+- [x] TODO: parsing                                                       
 
 # Special thanks:
 - [dylanaraps](https://github.com/dylanaraps) - for [https://github.com/dylanaraps/pywal](pywal) and other amazing stuff he created.

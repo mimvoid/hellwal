@@ -1,7 +1,12 @@
 /*  hellwal - v1.0.0 - MIT LICENSE
  *
+ *  [ ] TODO: gtk css?
+ *  [ ] TODO: better light theme
  *  [ ] TODO: config ( is it really needed? )                               
  *  [ ] TODO: support for other OS's like Mac or Win                        
+ *  [ ] TODO: bright & dark offset value as cmd line argument               
+ *  [ ] TODO: cmd line arg to manipulate variety of different colors        
+ *  [ ] TODO: handle exception: unclosed delim
  *  ------------------------------------------------------------------------
  *  [x] TODO: tweaking options for generated colors (func + dark-light mode 
  *  [x] TODO: support for already built themes (like gruvbox etc.)          
@@ -12,6 +17,10 @@
  *  [x] TODO: gen. colors                                                   
  *  [x] TODO: templating                                                    
  *  [x] TODO: parsing                                                       
+ *
+ *
+ * changelog v1.0.1:
+ *  - arguably better light mode
  *
  * changelog v1.0.0:
  *  - first decent verision to release.
@@ -268,8 +277,9 @@ RGB saturate_color(RGB color, float factor);
 RGB adjust_luminance(RGB color, float factor);
 RGB bin_to_color(int r_bin, int g_bin, int b_bin);
 RGB average_color(IMG *img, size_t start, size_t end);
-RGB blend_colors(const RGB color1, const RGB color2, float blend_factor);
 int get_channel(RGB *colors, size_t start, size_t end, int channel);
+RGB blend_colors(const RGB color1, const RGB color2, float blend_factor);
+RGB blend_with_brightness(RGB bright_color, RGB mix_color, float mix_ratio);
 
 void rgb_to_hsl(RGB color, float *h, float *s, float *l);
 void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes) ;
@@ -803,6 +813,34 @@ RGB blend_colors(const RGB color1, const RGB color2, float blend_factor)
     };
 }
 
+/* 
+ * blend two colors together based on a blend factor,
+ * bright mode - leave little color accent on white surface
+ */
+RGB blend_with_brightness(RGB bright_color, RGB mix_color, float mix_ratio)
+{
+    if (mix_ratio < 0.0f) mix_ratio = 0.0f;
+    if (mix_ratio > 1.0f) mix_ratio = 1.0f;
+
+    RGB blended;
+    blended.R = bright_color.R + mix_ratio * (mix_color.R - bright_color.R);
+    blended.G = bright_color.G + mix_ratio * (mix_color.G - bright_color.G);
+    blended.B = bright_color.B + mix_ratio * (mix_color.B - bright_color.B);
+
+    uint8_t max_channel = blended.R > blended.G ? (blended.R > blended.B ? blended.R : blended.R) : (blended.G > blended.B ? blended.G : blended.B);
+    if (max_channel < 255)
+    {
+        float adjustment = 255.0f / max_channel;
+        blended.R = (uint8_t)(blended.R * adjustment);
+        blended.G = (uint8_t)(blended.G * adjustment);
+        blended.B = (uint8_t)(blended.B * adjustment);
+    }
+
+    return blended;
+}
+
+
+
 /* calculate the average color of a given pixel range in an image */
 RGB average_color(IMG *img, size_t start, size_t end)
 {
@@ -916,6 +954,38 @@ void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, si
     }
 }
 
+void gen_palette_handle_light_mode(PALETTE *p)
+{
+    if (p == NULL)
+        return;
+
+    for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
+        p->colors[i] = lighten_color(p->colors[i - PALETTE_SIZE / 2], 0.2);
+
+    RGB temp_color_0 =  blend_with_brightness(saturate_color(lighten_color(p->colors[15], 0.6), 0.6), p->colors[5], 0.2f);
+    RGB temp_color_7 =  darken_color( p->colors[7], 0.5);
+    RGB temp_color_15 = p->colors[0];
+
+    p->colors[14] = darken_color(p->colors[14], 0.3f);
+
+    p->colors[0] = temp_color_0;
+    p->colors[7] = temp_color_7;
+    p->colors[15] = temp_color_15;
+}
+
+void gen_palette_handle_dark_mode(PALETTE *p)
+{
+    if (p==NULL)
+        return;
+
+    for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
+        p->colors[i] = lighten_color(p->colors[i - PALETTE_SIZE / 2], 0.25f);
+
+    p->colors[0] = darken_color(p->colors[0], 0.7f);    // BG
+    p->colors[15] = lighten_color(p->colors[15], 0.5f); // FG
+    p->colors[7] = lighten_color(p->colors[7], 0.4f);   // Term text
+}
+
 PALETTE gen_palette(IMG *img)
 {
     PALETTE palette;
@@ -1005,13 +1075,18 @@ PALETTE gen_palette(IMG *img)
         }
     }
 
-    sort_palette_by_luminance(&palette);
-    for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
-        palette.colors[i] = lighten_color(palette.colors[i - PALETTE_SIZE / 2], 0.25f);
 
-    palette.colors[0] = darken_color(palette.colors[0], 0.7f); // BG
-    palette.colors[7] = lighten_color(palette.colors[7], 0.4f); // Term text
-    palette.colors[15] = lighten_color(palette.colors[15], 0.5f); // FG
+    /* 
+     * if user provided LIGHT_ARG, make some changes
+     * to make it look better
+     */
+    sort_palette_by_luminance(&palette);
+
+    /* Handle dark/light mode */
+    if (LIGHT_ARG != NULL)
+        gen_palette_handle_light_mode(&palette);
+    else
+        gen_palette_handle_dark_mode(&palette);
 
     return palette;
 }
@@ -1605,22 +1680,20 @@ int main(int argc, char **argv)
 
     PALETTE pal;
 
+
     if (THEME_ARG)
         pal = process_themeing(THEME_ARG); /* if true, program end's here */
-    else
-    {
+    else {
         IMG *img = img_load(IMAGE_ARG);
         pal = gen_palette(img);
         img_free(img);
     }
 
-    if (LIGHT_ARG != NULL && DARK_ARG == NULL)
-        reverse_palette(&pal);
-
     palette_print(pal);
     set_term_colors(pal);
     process_templating(pal);
 
+    /* Run script or command from --script argument */
     run_script(SCRIPT_ARG);
 
     return 0;
