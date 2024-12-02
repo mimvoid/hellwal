@@ -9,7 +9,9 @@
 
 To install from **AUR**, run:
 
-``yay -S hellwal``
+```sh
+yay -S hellwal
+```
 
 Or get a binary: go to [releases](https://github.com/danihek/hellwal/releases) page and download the [hellwal](https://github.com/danihek/hellwal/releases/download/v1.0.0/hellwal) executable.
 
@@ -17,19 +19,32 @@ Or get a binary: go to [releases](https://github.com/danihek/hellwal/releases) p
 
 Clone git repo, run make command and you are ready to go! - you just need C compiler and gnumake!
 
-``git clone https://github.com/danihek/hellwal && cd hellwal  && make``
+```sh
+git clone https://github.com/danihek/hellwal && cd hellwal  && make
+```
 
 ## How to use?
 
-Just run ``hellwal -i [image]`` with your wallpaper - color palette will be generated, terminals colored, and if you have any templates in ~/.config/hellwal, they will be saved in ~/.cache/hellwal/ or other specified directory.
-You can also run with ``-i <folder> --random`` - it will randomly pick image from given directory.
+Run this with your wallpaper image:
+
+```sh
+hellwal -i [image]
+```
+
+You can also randomly pick image from given directory like this:
+
+```sh
+hellwal -i <folder> --random
+```
+
+Generated, templates are saved in ``~/.cache/hellwal/`` directory.
 
 ## Templates
 
 Look up for templating examples in ./templates folder, they look more-less like this:
 **!![INFO]!!** - if you got hellwal from **AUR** you have default templates examples in `/usr/share/docs/`
 
-```
+```sh
 # Main
 background='%%background%%'
 foreground='%%foreground%%'
@@ -71,7 +86,7 @@ You can set your own theme, re-run it anytime and apply to your config or other 
 It can be previously generated palette from image, gruvbox, tokyonight or anything you want!
 For example gruvbox theme:
 
-```
+```sh
 %% color0  = #282828 %%
 %% color1  = #cc241d %%
 %% color2  = #98971a %%
@@ -92,15 +107,15 @@ For example gruvbox theme:
 
 Save text above as file or take from this repo [./themes/gruvbox.hellwal](gruvbox) and just run hellwal:
 
-``
+```sh
 hellwal --theme ./themes/gruvbox.hellwal
-``
+```
 
 I recommend to put all themes to ``~/.config/hellwal/themes folder``, because from there you can just provide theme name, and it will pick it up automatically, without specifying path. Of course if you want, you can also set different theme-folder path. For example:
 
-``
+```sh
 hellwal -t gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/themes
-``
+```
 
 ### Modes
 
@@ -119,7 +134,7 @@ If you want your new terminals to open with previusly generated or specified col
 
 then in ``.bash.rc`` add following lines:
 
-```
+```sh
 source ~/.cache/hellwal/variables.sh
 sh ~/.cache/hellwal/terminal.sh
 ```
