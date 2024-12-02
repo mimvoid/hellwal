@@ -144,5 +144,8 @@ sh ~/.cache/hellwal/terminal.sh
 - [x] TODO: templating                                                    
 - [x] TODO: parsing                                                       
 
+# Showcase
+![showcase2](https://github.com/user-attachments/assets/ddf2a55e-0fbb-4661-827a-6b124f1dacdb)
+
 # Special thanks:
 - [dylanaraps](https://github.com/dylanaraps) - for [https://github.com/dylanaraps/pywal](pywal) and other amazing stuff he created.
