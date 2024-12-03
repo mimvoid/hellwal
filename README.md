@@ -40,9 +40,9 @@ hellwal -i <folder> --random
 Generated, templates are saved in ``~/.cache/hellwal/`` directory.
 
 ## Templates
+**[INFO]** - if you got hellwal from **AUR**, examples of default templates are stored in `/usr/share/docs/`
 
-Look up for templating examples in ./templates folder, they look more-less like this:
-**!![INFO]!!** - if you got hellwal from **AUR** you have default templates examples in `/usr/share/docs/`
+Look up for templating examples in [templates folder](./templates), they look more-less like this:
 
 ```sh
 # Main
@@ -105,7 +105,7 @@ For example gruvbox theme:
 %% color15 = #ebdbb2 %%
 ```
 
-Save text above as file or take from this repo [./themes/gruvbox.hellwal](gruvbox) and just run hellwal:
+Save text above as file or take from this repo [gruvbox](./themes/gruvbox.hellwal) and just run hellwal:
 
 ```sh
 hellwal --theme ./themes/gruvbox.hellwal
