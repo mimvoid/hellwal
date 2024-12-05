@@ -138,10 +138,16 @@ typedef struct
  * what can I say huh */
 typedef struct
 {
-    uint8_t R;
-    uint8_t G;
-    uint8_t B;
+    uint8_t R; // Red   [0, 255]
+    uint8_t G; // Green [0, 255]
+    uint8_t B; // Blue  [0, 255]
 } RGB;
+
+typedef struct {
+    float H; // Hue        [0, 360]
+    float S; // Saturation [0, 1]
+    float L; // Luminance  [0, 1]
+} HSL;
 
 /* PALETTE
  *
@@ -239,10 +245,15 @@ PALETTE pal_log = {
 int set_args(int argc, char *argv[]);
 
 /* utils */
+RGB clamp_rgb(RGB color);
+uint8_t clamp_uint8(int value);
+
 char *rand_file(char *path);
-void check_output_dir(char *path);
-void hellwal_usage(const char *name);
 char* home_full_path(const char* path);
+
+void check_output_dir(char *path);
+void run_script(const char *script);
+void hellwal_usage(const char *name);
 
 /* logging */
 void eu(const char *format, ...);
@@ -255,41 +266,35 @@ IMG *img_load(char *filename);
 void img_free(IMG *img);
 
 /* RGB */
-float calculate_luminance(RGB c);
-float calculate_color_distance(RGB a, RGB b);
+void print_rgb(RGB col);
+HSL rgb_to_hsl(RGB color);
+void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes);
 
-int is_color_palette_var(char *name);
-int is_hex_to_rgb(const char *hex, RGB *p);
-int compare_luminance(const void *a, const void *b);
-
-/* RGB */
 float calculate_luminance(RGB c);
 float color_distance(RGB color1, RGB color2);
 float calculate_color_distance(RGB a, RGB b);
 
-int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
+int is_more_colorful(RGB a, RGB b);
+int is_color_palette_var(char *name);
 int compare_luminance(const void *a, const void *b);
+int get_channel(RGB *colors, size_t start, size_t end, int channel);
+int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
 
 RGB darken_color(RGB color, float factor);
-RGB hsl_to_rgb(float h, float s, float l);
 RGB lighten_color(RGB color, float factor);
 RGB saturate_color(RGB color, float factor);
 RGB adjust_luminance(RGB color, float factor);
 RGB bin_to_color(int r_bin, int g_bin, int b_bin);
 RGB average_color(IMG *img, size_t start, size_t end);
-int get_channel(RGB *colors, size_t start, size_t end, int channel);
 RGB blend_colors(const RGB color1, const RGB color2, float blend_factor);
 RGB blend_with_brightness(RGB bright_color, RGB mix_color, float mix_ratio);
-
-void rgb_to_hsl(RGB color, float *h, float *s, float *l);
-void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes) ;
 
 /* term */
 void set_term_colors(PALETTE pal);
 
 /* palettes */
 PALETTE gen_palette(IMG *img);
-void palette_print(PALETTE pal);
+void print_palette(PALETTE pal);
 void reverse_palette(PALETTE *palette);
 void sort_palette_by_luminance(PALETTE *palette);
 char *palette_color(PALETTE pal, unsigned c, char *fmt);
@@ -594,6 +599,24 @@ void run_script(const char *script)
         err("Script \"%s\" exited with code: %d", script, exit_code);
 }
 
+/* avoid exceeding max value */
+uint8_t clamp_uint8(int value)
+{
+    if (value < 0) return 0;
+    if (value > 255) return 255;
+    return (uint8_t)value;
+}
+
+/* avoid exceeding max value for each */
+RGB clamp_rgb(RGB color)
+{
+    return (RGB)
+    {
+        .R = clamp_uint8(color.R),
+        .G = clamp_uint8(color.G),
+        .B = clamp_uint8(color.B)
+    };
+}
 
 /* get random file from given path */
 char *rand_file(char *path)
@@ -694,68 +717,59 @@ RGB saturate_color(RGB color, float factor)
     return color;
 }
 
-/* Convert RGB to HSL */
-void rgb_to_hsl(RGB color, float *h, float *s, float *l)
+/* Convert RGB to hsl */
+HSL rgb_to_hsl(RGB color)
 {
     float r = color.R / 255.0f;
     float g = color.G / 255.0f;
     float b = color.B / 255.0f;
+    
+    float max_val = fmaxf(r, fmaxf(g, b));
+    float min_val = fminf(r, fminf(g, b));
+    float delta = max_val - min_val;
 
-    float max = fmaxf(r, fmaxf(g, b));
-    float min = fminf(r, fminf(g, b));
-    float delta = max - min;
+    HSL hsl;
+    hsl.L = max_val;
 
-    // Lightness
-    *l = (max + min) / 2.0f;
+    if (max_val != 0)
+    {
+        hsl.S = delta / max_val; // Saturation
+    }
+    else
+    {
+        hsl.S = 0;
+        hsl.H = -1;
+        return hsl;
+    }
 
-    // Saturation
-    if (delta == 0) {
-        *s = 0;
-        *h = 0; // Undefined
-    } else {
-        *s = delta / (1.0f - fabsf(2.0f * *l - 1.0f));
-        if (max == r) {
-            *h = fmodf((g - b) / delta, 6.0f);
-        } else if (max == g) {
-            *h = (b - r) / delta + 2.0f;
-        } else {
-            *h = (r - g) / delta + 4.0f;
+    if (delta == 0)
+    {
+        hsl.H = 0;
+    }
+    else
+    {
+        if (r == max_val)
+        {
+            hsl.H = (g - b) / delta;
         }
-        *h *= 60.0f;
-        if (*h < 0) *h += 360.0f;
-    }
-}
+        else if (g == max_val)
+        {
+            hsl.H = 2 + (b - r) / delta;
+        }
+        else
+        {
+            hsl.H = 4 + (r - g) / delta;
+        }
 
-/* Convert HSL to RGB */
-RGB hsl_to_rgb(float h, float s, float l)
-{
-    float c = (1.0f - fabsf(2.0f * l - 1.0f)) * s;
-    float x = c * (1.0f - fabsf(fmodf(h / 60.0f, 2.0f) - 1.0f));
-    float m = l - c / 2.0f;
+        hsl.H *= 60;
 
-    float r = 0, g = 0, b = 0;
-    if (h >= 0 && h < 60) {
-        r = c;
-        g = x;
-    } else if (h >= 60 && h < 120) {
-        r = x;
-        g = c;
-    } else if (h >= 120 && h < 180) {
-        g = c;
-        b = x;
-    } else if (h >= 180 && h < 240) {
-        g = x;
-        b = c;
-    } else if (h >= 240 && h < 300) {
-        r = x;
-        b = c;
-    } else {
-        r = c;
-        b = x;
+        if (hsl.H < 0)
+        {
+            hsl.H += 360;
+        }
     }
 
-    RGB rgb = {(unsigned char)((r + m) * 255), (unsigned char)((g + m) * 255), (unsigned char)((b + m) * 255)};
-    return rgb;
+    return hsl;
 }
 
 /* function to reverse the palette, used when light mode is specified */
@@ -801,16 +815,13 @@ int is_color_too_similar(RGB *palette, int num_colors, RGB new_color)
 }
 
 /* blend two colors together based on a blend factor */
-RGB blend_colors(const RGB color1, const RGB color2, float blend_factor)
-{
-    if (blend_factor < 0.0f) blend_factor = 0.0f;
-    if (blend_factor > 1.0f) blend_factor = 1.0f;
-
-    return (RGB){
-        .R = (uint8_t)((1.0f - blend_factor) * color1.R + blend_factor * color2.R),
-        .G = (uint8_t)((1.0f - blend_factor) * color1.G + blend_factor * color2.G),
-        .B = (uint8_t)((1.0f - blend_factor) * color1.B + blend_factor * color2.B)
-    };
+RGB blend_colors(RGB c1, RGB c2, float weight) {
+    weight = (weight < 0.0f) ? 0.0f : (weight > 1.0f) ? 1.0f : weight; // Clamp weight
+    return clamp_rgb((RGB){
+        .R = (int)(c1.R * (1 - weight) + c2.R * weight),
+        .G = (int)(c1.G * (1 - weight) + c2.G * weight),
+        .B = (int)(c1.B * (1 - weight) + c2.B * weight)
+    });
 }
 
 /* 
@@ -839,13 +850,11 @@ RGB blend_with_brightness(RGB bright_color, RGB mix_color, float mix_ratio)
     return blended;
 }
 
-
-
 /* calculate the average color of a given pixel range in an image */
-RGB average_color(IMG *img, size_t start, size_t end)
+RGB average_color(IMG *img, size_t start, size_t end) 
 {
-    uint64_t sum_r = 0, sum_g = 0, sum_b = 0;
-    size_t pixel_count = end - start;
+    long sum_r = 0, sum_g = 0, sum_b = 0;
+    size_t count = end - start;
 
     for (size_t i = start; i < end; i++)
     {
@@ -854,24 +863,26 @@ RGB average_color(IMG *img, size_t start, size_t end)
         sum_b += img->pixels[i * 3 + 2];
     }
 
-    return (RGB){
-        .R = (uint8_t)(sum_r / pixel_count),
-        .G = (uint8_t)(sum_g / pixel_count),
-        .B = (uint8_t)(sum_b / pixel_count)
-    };
+    return clamp_rgb(
+    (RGB)
+    {
+        .R = (int)(sum_r / count),
+        .G = (int)(sum_g / count),
+        .B = (int)(sum_b / count)
+    });
 }
 
 /* convert bin indices to an rgb color */
 RGB bin_to_color(int r_bin, int g_bin, int b_bin)
 {
-    int bin_size = 256 / BINS;
-    return (RGB){
-        .R = (uint8_t)(r_bin * bin_size + bin_size / 2),
-        .G = (uint8_t)(g_bin * bin_size + bin_size / 2),
-        .B = (uint8_t)(b_bin * bin_size + bin_size / 2)
-    };
+    return clamp_rgb(
+    (RGB)
+    {
+        .R = r_bin * (256 / BINS),
+        .G = g_bin * (256 / BINS),
+        .B = b_bin * (256 / BINS)
+    });
 }
-
 
 /* adjust luminance of a color */
 RGB adjust_luminance(RGB color, float factor)
@@ -1002,15 +1013,11 @@ PALETTE gen_palette(IMG *img)
     int histogram[BINS][BINS][BINS] = {{{0}}};
     for (size_t i = 0; i < total_pixels; i++)
     {
-        uint8_t R = img->pixels[i * 3];
-        uint8_t G = img->pixels[i * 3 + 1];
-        uint8_t B = img->pixels[i * 3 + 2];
+        int r_bin = img->pixels[i * 3] / (256 / BINS);
+        int g_bin = img->pixels[i * 3 + 1] / (256 / BINS);
+        int b_bin = img->pixels[i * 3 + 2] / (256 / BINS);
 
-        int r_bin = R / (256 / BINS);
-        int g_bin = G / (256 / BINS);
-        int b_bin = B / (256 / BINS);
-
-        histogram[r_bin][g_bin][b_bin]++;
+        histogram[r_bin][g_bin][b_bin] = (histogram[r_bin][g_bin][b_bin] < INT_MAX) ? histogram[r_bin][g_bin][b_bin] + 1 : INT_MAX;
     }
 
     typedef struct {
@@ -1045,8 +1052,16 @@ PALETTE gen_palette(IMG *img)
     {
         RGB avg_color = average_color(img, starts[i], ends[i]);
         RGB bin_color = bin_to_color(top_bins[i].r_bin, top_bins[i].g_bin, top_bins[i].b_bin);
+        RGB blended_colors = blend_colors(avg_color, bin_color, 0.5f);
 
-        palette.colors[num_colors++] = blend_colors(avg_color, bin_color, 0.5f);
+        print_rgb(avg_color);
+        printf(" - ");
+        print_rgb(bin_color);
+        printf(" = ");
+        print_rgb(blended_colors);
+        printf("\n");
+
+        palette.colors[num_colors++] = blended_colors;
     }
 
     size_t sample_points[] = {
@@ -1060,11 +1075,13 @@ PALETTE gen_palette(IMG *img)
         3 * (img->height / 4) * img->width + 3 * (img->width / 4)
     };
 
-    for (size_t j = 0; j < sizeof(sample_points) / sizeof(sample_points[0]) && num_colors < PALETTE_SIZE; j++) {
+    for (size_t j = 0; j < sizeof(sample_points) / sizeof(sample_points[0]) && num_colors < PALETTE_SIZE; j++)
+    {
         size_t i = sample_points[j];
         if (i + 3 >= img->size) continue;
 
         RGB new_color = {img->pixels[i], img->pixels[i + 1], img->pixels[i + 2]};
+
         if (!is_color_too_similar(palette.colors, num_colors, new_color))
         {
             palette.colors[num_colors++] = new_color;
@@ -1091,17 +1108,26 @@ PALETTE gen_palette(IMG *img)
     return palette;
 }
 
-/* Writes palete to stdout */
-void palette_print(PALETTE pal)
+/* Writes color as block to stdout - it does not perform new line by itself */
+void print_rgb(RGB col)
 {
     if (QUIET_ARG != NULL)
         return;
 
-    for (unsigned i=0; i<PALETTE_SIZE; i++)
+    /* Write color from as colored block */
+    fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", col.R, col.G, col.B);
+    fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", col.R, col.G, col.B);
+}
+
+/* Writes palete to stdout */
+void print_palette(PALETTE pal)
+{
+    if (QUIET_ARG != NULL)
+        return;
+
+    for (size_t i=0; i<PALETTE_SIZE; i++)
     {
-        /* Write color from palete as colored block */
-        fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", pal.colors[i].R, pal.colors[i].G, pal.colors[i].B);
-        fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", pal.colors[i].R, pal.colors[i].G, pal.colors[i].B);
+        print_rgb(pal.colors[i]);
         if (i+1 == PALETTE_SIZE/2) printf("\n");
     }
     printf("\n");
@@ -1131,13 +1157,15 @@ IMG *img_load(char *filename)
 
     int width, height;
     int numberOfChannels;
-    uint8_t *imageData = stbi_load(filename, &width, &height, &numberOfChannels, 0);
+    int forcedNumberOfChannels = 3;
+
+    uint8_t *imageData = stbi_load(filename, &width, &height, &numberOfChannels, forcedNumberOfChannels); /* fix BAD number of channels. It causes unmatched and inaccurate colors */
 
     if (imageData == 0) err("Error while loading the file: %s", filename);
 
     IMG *img = malloc(sizeof(IMG));
 
-    img->size = width * height * numberOfChannels;
+    img->size = width * height * forcedNumberOfChannels;
     img->pixels = imageData;
 
     log_c("Loaded!");
@@ -1572,6 +1600,11 @@ int hex_to_rgb(const char *hex, RGB *p)
     return 1;
 }
 
+int is_more_colorful(RGB a, RGB b)
+{
+    return rgb_to_hsl(a).S > rgb_to_hsl(b).S;
+}
+
 int is_color_palette_var(char *name)
 {
     for (size_t i = 0; i < PALETTE_SIZE; i++) {
@@ -1689,7 +1722,7 @@ int main(int argc, char **argv)
         img_free(img);
     }
 
-    palette_print(pal);
+    print_palette(pal);
     set_term_colors(pal);
     process_templating(pal);
 
