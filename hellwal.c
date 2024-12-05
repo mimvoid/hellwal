@@ -1,7 +1,6 @@
 /*  hellwal - v1.0.0 - MIT LICENSE
  *
  *  [ ] TODO: gtk css?
- *  [ ] TODO: better light theme
  *  [ ] TODO: config ( is it really needed? )                               
  *  [ ] TODO: support for other OS's like Mac or Win                        
  *  [ ] TODO: bright & dark offset value as cmd line argument               
@@ -11,6 +10,7 @@
  *  [x] TODO: tweaking options for generated colors (func + dark-light mode 
  *  [x] TODO: support for already built themes (like gruvbox etc.)          
  *  [x] TODO: do more pleasant color schemes                                
+ *  [x] TODO: better light theme
  *  [x] TODO: print proper program usage                                    
  *  [x] TODO: -r for random                                                 
  *  [x] TODO: -s for scripts                                                
@@ -21,6 +21,9 @@
  *
  * changelog v1.0.1:
  *  - arguably better light mode
+ *  - fixed loading incorrect number of channels from image, this casued unmatched palette
+ *  - added gray-scale argument to manipulate 'grayness' of color palette
+ *  - added '--debug' cmd line argument for more verbose output
  *
  * changelog v1.0.0:
  *  - first decent verision to release.
@@ -210,8 +213,18 @@ char *THEME_FOLDER_ARG  = NULL;
  */
 char *RANDOM_ARG = NULL;
 
+/* enables more verbose output, to see what's going on */
+char *DEBUG_ARG = NULL;
+
 /* run script after successfull hellwal job */
 char *SCRIPT_ARG = NULL;
+
+/* defines 'grayness' of colorpalette */
+float GRAY_SCALE_ARG = -1;
+
+/* defines offsets to manipulate darkness and brightness */
+float BRIGHTNESS_OFFSET_ARG = -1;
+float DARKNESS_OFFSET_ARG = -1;
 
 /* one palette as global variable, so log_c() can access colors
  * 1 = log
@@ -247,11 +260,13 @@ int set_args(int argc, char *argv[]);
 /* utils */
 RGB clamp_rgb(RGB color);
 uint8_t clamp_uint8(int value);
+int is_between_01_float(const char *str);
 
 char *rand_file(char *path);
-char* home_full_path(const char* path);
+char *home_full_path(const char* path);
 
 void check_output_dir(char *path);
+void remove_whitespaces(char *str);
 void run_script(const char *script);
 void hellwal_usage(const char *name);
 
@@ -280,6 +295,7 @@ int compare_luminance(const void *a, const void *b);
 int get_channel(RGB *colors, size_t start, size_t end, int channel);
 int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
 
+RGB to_grayscale(RGB color);
 RGB darken_color(RGB color, float factor);
 RGB lighten_color(RGB color, float factor);
 RGB saturate_color(RGB color, float factor);
@@ -294,6 +310,9 @@ void set_term_colors(PALETTE pal);
 
 /* palettes */
 PALETTE gen_palette(IMG *img);
+void gen_palette_handle_dark_mode(PALETTE *p);
+void gen_palette_handle_light_mode(PALETTE *p);
+
 void print_palette(PALETTE pal);
 void reverse_palette(PALETTE *palette);
 void sort_palette_by_luminance(PALETTE *palette);
@@ -399,6 +418,11 @@ int set_args(int argc, char *argv[])
             /* anything other than NULL, triggers */
             RANDOM_ARG = "";
         }
+        else if (strcmp(argv[i], "--debug") == 0)
+        {
+            /* anything other than NULL, triggers */
+            DEBUG_ARG = "";
+        }
         else if ((strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0))
         {
             if (i + 1 < argc)
@@ -427,6 +451,42 @@ int set_args(int argc, char *argv[])
         {
             if (i + 1 < argc)
                 SCRIPT_ARG = argv[++i];
+            else
+                argc = -1;
+        }
+        else if ((strcmp(argv[i], "--gray-scale") == 0 || strcmp(argv[i], "-g") == 0))
+        {
+            if (i + 1 < argc)
+            {
+                if (is_between_01_float(argv[++i]))
+                    GRAY_SCALE_ARG = strtod(argv[i], NULL);
+                else
+                    warn("Grayscale value have to be floating point number between 0-1!, skipping argument.");
+            }
+            else
+                argc = -1;
+        }
+        else if ((strcmp(argv[i], "--dark-offset") == 0 || strcmp(argv[i], "-n") == 0))
+        {
+            if (i + 1 < argc)
+            {
+                if (is_between_01_float(argv[++i]))
+                    DARKNESS_OFFSET_ARG = strtod(argv[i], NULL);
+                else
+                    warn("Dark offset value have to be floating point number between 0-1!, skipping argument.");
+            }
+            else
+                argc = -1;
+        }
+        else if ((strcmp(argv[i], "--bright-offset") == 0 || strcmp(argv[i], "-b") == 0))
+        {
+            if (i + 1 < argc)
+            {
+                if (is_between_01_float(argv[++i]))
+                    BRIGHTNESS_OFFSET_ARG = strtod(argv[i], NULL);
+                else
+                    warn("Bright offset value have to be floating point number between 0-1!, skipping argument.");
+            }
             else
                 argc = -1;
         }
@@ -678,6 +738,17 @@ void remove_whitespaces(char *str)
     *write = '\0';
 }
 
+int is_between_01_float(const char *str)
+{
+    char *end;
+    double number = strtod(str, &end);
+
+    if (*end != '\0')
+        return 0;
+
+    return (number >= 0.0 && number <= 1.0);
+}
+
 /* calculate how bright is color */
 float calculate_luminance(RGB c)
 {
@@ -687,7 +758,7 @@ float calculate_luminance(RGB c)
 /* sort palette by luminance to spread out colors */
 void sort_palette_by_luminance(PALETTE *palette)
 {
-    qsort(palette->colors, 8, sizeof(RGB), compare_luminance);
+    qsort(palette->colors, PALETTE_SIZE/2, sizeof(RGB), compare_luminance);
 }
 
 /* compare two RGB colors */
@@ -715,6 +786,12 @@ RGB saturate_color(RGB color, float factor)
     color.G = (uint8_t)(color.G + (max_val - color.G) * factor);
     color.B = (uint8_t)(color.B + (max_val - color.B) * factor);
     return color;
+}
+
+RGB to_grayscale(RGB color)
+{
+    uint8_t gray_value = (uint8_t)(0.299f * color.R + 0.587f * color.G + 0.114f * color.B);
+    return (RGB){gray_value, gray_value, gray_value};
 }
 
 /* Convert RGB to hsl */
@@ -975,13 +1052,17 @@ void gen_palette_handle_light_mode(PALETTE *p)
 
     RGB temp_color_0 =  blend_with_brightness(saturate_color(lighten_color(p->colors[15], 0.6), 0.6), p->colors[5], 0.2f);
     RGB temp_color_7 =  darken_color( p->colors[7], 0.5);
+    RGB temp_color_14 = p->colors[14];
     RGB temp_color_15 = p->colors[0];
+
+    reverse_palette(p);
 
     p->colors[14] = darken_color(p->colors[14], 0.3f);
 
     p->colors[0] = temp_color_0;
-    p->colors[7] = temp_color_7;
-    p->colors[15] = temp_color_15;
+    p->colors[7] = temp_color_15;
+    p->colors[14] = temp_color_7;
+    p->colors[15] = temp_color_14;
 }
 
 void gen_palette_handle_dark_mode(PALETTE *p)
@@ -989,8 +1070,22 @@ void gen_palette_handle_dark_mode(PALETTE *p)
     if (p==NULL)
         return;
 
+    /* UNINMPLEMENTED */
+    //float offset = 0;
+    //if (DARKNESS_OFFSET_ARG != -1)
+    //    offset -= DARKNESS_OFFSET_ARG;
+    //if (BRIGHTNESS_OFFSET_ARG != -1)
+    //    offset += BRIGHTNESS_OFFSET_ARG;
+
     for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
+    {
+        //if (offset < 0)
+        //    p->colors[i - PALETTE_SIZE / 2] = darken_color(p->colors[i - PALETTE_SIZE / 2], -1.f * offset);
+        //else if (offset > 0)
+        //    p->colors[i] = lighten_color(p->colors[i - PALETTE_SIZE / 2], 0.25f + offset);
+        //else
         p->colors[i] = lighten_color(p->colors[i - PALETTE_SIZE / 2], 0.25f);
+    }
 
     p->colors[0] = darken_color(p->colors[0], 0.7f);    // BG
     p->colors[15] = lighten_color(p->colors[15], 0.5f); // FG
@@ -1054,12 +1149,18 @@ PALETTE gen_palette(IMG *img)
         RGB bin_color = bin_to_color(top_bins[i].r_bin, top_bins[i].g_bin, top_bins[i].b_bin);
         RGB blended_colors = blend_colors(avg_color, bin_color, 0.5f);
 
-        print_rgb(avg_color);
-        printf(" - ");
-        print_rgb(bin_color);
-        printf(" = ");
-        print_rgb(blended_colors);
-        printf("\n");
+        if (GRAY_SCALE_ARG != -1)
+            blended_colors = saturate_color(blended_colors, GRAY_SCALE_ARG);
+
+        if (DEBUG_ARG != NULL)
+        {
+            print_rgb(avg_color);
+            printf(" - ");
+            print_rgb(bin_color);
+            printf(" = ");
+            print_rgb(blended_colors);
+            printf("\n");
+        }
 
         palette.colors[num_colors++] = blended_colors;
     }
@@ -1083,15 +1184,15 @@ PALETTE gen_palette(IMG *img)
         RGB new_color = {img->pixels[i], img->pixels[i + 1], img->pixels[i + 2]};
 
         if (!is_color_too_similar(palette.colors, num_colors, new_color))
-        {
-            palette.colors[num_colors++] = new_color;
-        }
+            new_color = palette.colors[num_colors++] = new_color;
         else
-        {
-            palette.colors[num_colors++] = blend_colors(new_color, *palette.colors, 0.5);
-        }
-    }
+            new_color = blend_colors(new_color, palette.colors[j], 0.5);
 
+        if (GRAY_SCALE_ARG != -1)
+            new_color = saturate_color(new_color, GRAY_SCALE_ARG);
+
+        palette.colors[num_colors++] = new_color;
+    }
 
     /* 
      * if user provided LIGHT_ARG, make some changes
@@ -1146,6 +1247,27 @@ char *palette_color(PALETTE pal, unsigned c, char *fmt)
     sprintf(buffer, fmt, pal.colors[c].R, pal.colors[c].G, pal.colors[c].B);
 
     return buffer;
+}
+
+/* print gray-scale palettes */
+void print_palette_gray_scale_iter(IMG *img, size_t iter)
+{
+    if (img == NULL) return;
+
+    PALETTE pal;
+
+    for (size_t i = 0; i < iter; i++)
+    {
+        GRAY_SCALE_ARG = (float)i == 0 ? 0 : (float)((float)i/iter);
+        pal = gen_palette(img);
+
+        sort_palette_by_luminance(&pal);
+
+        printf("GRAYSCALE VALUE: %f\n", GRAY_SCALE_ARG);
+        print_palette(pal);
+    }
+
+    GRAY_SCALE_ARG = -1.f;
 }
 
 /* Load image file using stb, return IMG structure */
@@ -1206,7 +1328,8 @@ void set_term_colors(PALETTE pal)
     const char *fmt_p = "\033]4;%d;#%s\033\\";
 
     /* Create the sequences */
-    for (unsigned i = 0; i < PALETTE_SIZE; i++) {
+    for (unsigned i = 0; i < PALETTE_SIZE; i++)
+    {
         const char *color = palette_color(pal, i, "%02x%02x%02x");
         offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_p, i, color);
     }
@@ -1282,7 +1405,8 @@ char *load_file(char *filename)
  */
 void process_templating(PALETTE pal)
 {
-    log_c("Processing templates: ");
+    if (DEBUG_ARG != NULL)
+        log_c("Processing templates: ");
 
     TEMPLATE **templates;
     size_t templates_count, t_success = 0;
@@ -1307,7 +1431,9 @@ void process_template(TEMPLATE *t, PALETTE pal)
         t->content = NULL;
         return;
     }
-    //log_c("  - generating template buffer: %s", t->name);
+
+    if (DEBUG_ARG != NULL)
+        log_c("  - generating template buffer: %s", t->name);
 
     char *template_buffer = calloc(1, 1);
     size_t template_size = 0;
@@ -1532,7 +1658,9 @@ size_t template_write(TEMPLATE *t, char *dir) {
     }
 
     fprintf(f, "%s", t->content);
-    //log_c("  - wrote template to: %s\n", path);
+    
+    if (DEBUG_ARG != NULL)
+        log_c("  - wrote template to: %s\n", path);
 
     fclose(f);
     return 1;
@@ -1716,12 +1844,14 @@ int main(int argc, char **argv)
 
     if (THEME_ARG)
         pal = process_themeing(THEME_ARG); /* if true, program end's here */
-    else {
+    else 
+    {
         IMG *img = img_load(IMAGE_ARG);
         pal = gen_palette(img);
         img_free(img);
     }
 
+    sort_palette_by_luminance(&pal);
     print_palette(pal);
     set_term_colors(pal);
     process_templating(pal);
