@@ -26,6 +26,8 @@
  *  - added --inverted cmd line argument, it inverts color palette colors
  *  - added --color -c argument. Now we have 3 modes: dark, light and color
  *  - added --gray-scale argument to manipulate 'grayness' of color palette
+ *  - added --static-background arg to set static background color
+ *  - added --static-foreground arg to set static foreground color
  *
  * changelog v1.0.0:
  *  - first decent verision to release.
@@ -226,6 +228,12 @@ char *SCRIPT_ARG = NULL;
 /* invert color palette colors */
 char *INVERT_ARG = NULL;
 
+/* Set Static Background colors */
+RGB *STATIC_BG_ARG = NULL;
+
+/* Set Static Foreground colors */
+RGB *STATIC_FG_ARG = NULL;
+
 /* defines 'grayness' of colorpalette */
 float GRAY_SCALE_ARG = -1;
 
@@ -275,6 +283,7 @@ float calculate_color_distance(RGB a, RGB b);
 
 int is_more_colorful(RGB a, RGB b);
 int is_color_palette_var(char *name);
+int hex_to_rgb(const char *hex, RGB *p);
 int compare_luminance(const void *a, const void *b);
 int get_channel(RGB *colors, size_t start, size_t end, int channel);
 int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
@@ -327,47 +336,32 @@ int process_theme(char *t, PALETTE *pal);
  /* prints usage to stdout */
 void hellwal_usage(const char *name)
 {
-    printf("Usage:\n\t%s -i <image> [OPTIONS]\n", name);
+    printf("Usage:\n");
+    printf("  %s -i <image> [OPTIONS]\n\n", name);
     printf("Options:\n");
-    printf("  --image,           -i <image>       Set image file\n");
-    printf("  --dark,            -d               Set dark mode (ON by default)\n");
-    printf("  --light,           -l               Set light mode\n");
-    printf("  --color,           -c               Set colorized mode (experimental)\n");
-    printf("  --quiet,           -q               Quiet. Suppress output\n");
-    printf("  --script,          -s <script>      Execute script after running hellwal\n");
-    printf("  --random,          -r               Pick random image or theme from directory\n");
-    printf("  --template-folder, -f <folder>      Set folder containing templates\n");
-    printf("  --output,          -o <folder>      Set output folder for generated templates\n");
-    printf("  --theme,           -t <file>        Set theme from theme folder or path to theme file\n");
-    printf("  --theme-folder,    -k <folder>      Set folder containing themes\n");
-    printf("  --gray-scale,      -g <value>       Apply grayscale filter (value between 0 and 1)\n");
-    printf("  --dark-offset,     -n <value>       Adjust darkness offset (value between 0 and 1)\n");
-    printf("  --bright-offset,   -b <value>       Adjust brightness offset (value between 0 and 1)\n");
-    printf("  --invert,          -v               Invert colors in the palette\n");
-    printf("  --help,            -h               Display this help and exit\n");
-
-    printf("\nDetailed Description:\n");
-    printf("  --image: Path to the image used to create a color palette\n");
-    printf("  --dark: Use dark mode colors (default mode)\n");
-    printf("  --light: Use light mode colors\n");
-    printf("  --color: Use colorized background and foreground for text elements\n");
-    printf("  --quiet: Suppress output messages\n");
-    printf("  --script: Specify a script or shell command to execute after running hellwal\n");
-    printf("  --random: Pick a random image or theme from a directory. Specify the directory using --image or --theme-folder\n");
-    printf("  --template-folder: Folder containing templates to process for generating colors. Default: ~/.config/hellwal/templates\n");
-    printf("  --output: Output folder for generated templates. Default: ~/.cache/hellwal/\n");
-    printf("  --theme: Specify a theme name from the theme folder or provide a path to a theme file\n");
-    printf("  --theme-folder: Folder containing themes. Default: ~/.config/hellwal/themes/\n");
-    printf("  --gray-scale: Apply a grayscale filter to the palette. Value must be a float between 0 and 1\n");
-    printf("  --dark-offset: Adjust the darkness offset. Value must be a float between 0 and 1\n");
-    printf("  --bright-offset: Adjust the brightness offset. Value must be a float between 0 and 1\n");
-    printf("  --invert: Invert all colors in the generated palette\n");
-
-    printf("\nNote for package manager installations:\n");
-    printf("Default templates and themes are pre-installed in /usr/share/docs/hellwal/templates and /usr/share/docs/hellwal/themes\n");
-    printf("You can copy these to your configuration directory.\n");
+    printf("  -i, --image <image>                Set image file\n");
+    printf("  -d, --dark                         Set dark mode (default)\n");
+    printf("  -l, --light                        Set light mode\n");
+    printf("  -c, --color                        Enable colorized mode (experimental)\n");
+    printf("  -v, --invert                       Invert colors in the palette\n");
+    printf("  -q, --quiet                        Suppress output\n");
+    printf("  -r, --random                       Pick random image or theme\n");
+    printf("  -s, --script             <script>  Execute script after running hellwal\n");
+    printf("  -f, --template-folder    <dir>     Set folder containing templates\n");
+    printf("  -o, --output             <dir>     Set output folder for generated templates\n");
+    printf("  -t, --theme              <file>    Set theme file or name\n");
+    printf("  -k, --theme-folder       <value>   Set folder containing themes\n");
+    printf("  -g, --gray-scale         <value>   Apply grayscale filter   (0-1) (float)\n");
+    printf("  -n, --dark-offset        <value>   Adjust darkness offset   (0-1) (float)\n");
+    printf("  -b, --bright-offset      <value>   Adjust brightness offset (0-1) (float)\n");
+    printf("  --, --static-background \"#hex\"     Set static background\n");
+    printf("  --, --static-foreground \"#hex\"     Set static foreground\n");
+    printf("  -h, --help                         Display this help and exit\n\n");
+    printf("Defaults:\n");
+    printf("  Template folder: ~/.config/hellwal/templates\n");
+    printf("  Theme folder: ~/.config/hellwal/themes\n");
+    printf("  Output folder: ~/.cache/hellwal/\n\n");
 }
-
 
 /* set given arguments */
 int set_args(int argc, char *argv[])
@@ -383,14 +377,6 @@ int set_args(int argc, char *argv[])
             hellwal_usage(argv[0]);
             exit(EXIT_SUCCESS);
         }
-        else if ((strcmp(argv[i], "--template-folder") == 0 || strcmp(argv[i], "-f") == 0))
-        {
-            if (i + 1 < argc)
-                TEMPLATE_FOLDER_ARG = argv[++i];
-            else {
-                argc = -1;
-            }
-        }
         else if ((strcmp(argv[i], "--image") == 0 || strcmp(argv[i], "-i") == 0))
         {
             if (i + 1 < argc)
@@ -399,11 +385,6 @@ int set_args(int argc, char *argv[])
                 argc = -1;
             }
         }
-        else if ((strcmp(argv[i], "--quiet") == 0 || strcmp(argv[i], "-q") == 0))
-        {
-            /* anything other than NULL, makes quiet/silent output */
-            QUIET_ARG = "";
-        }
         else if ((strcmp(argv[i], "--dark") == 0 || strcmp(argv[i], "-d") == 0))
         {
             /* anything other than NULL, makes dark mode */
@@ -411,27 +392,35 @@ int set_args(int argc, char *argv[])
         }
         else if ((strcmp(argv[i], "--light") == 0 || strcmp(argv[i], "-l") == 0))
         {
-            /* anything other than NULL, makes light mode */
             LIGHT_ARG = "";
         }
         else if ((strcmp(argv[i], "--color") == 0 || strcmp(argv[i], "-c") == 0))
         {
-            /* anything other than NULL, makes color mode */
             COLOR_ARG = "";
-        }
-        else if ((strcmp(argv[i], "--random") == 0 || strcmp(argv[i], "-r") == 0))
-        {
-            /* anything other than NULL, triggers */
-            RANDOM_ARG = "";
-        }
-        else if (strcmp(argv[i], "--debug") == 0)
-        {
-            /* anything other than NULL, triggers */
-            DEBUG_ARG = "";
         }
         else if ((strcmp(argv[i], "--invert") == 0 || strcmp(argv[i], "-v") == 0))
         {
             INVERT_ARG = "";
+        }
+        else if ((strcmp(argv[i], "--random") == 0 || strcmp(argv[i], "-r") == 0))
+        {
+            RANDOM_ARG = "";
+        }
+        else if ((strcmp(argv[i], "--quiet") == 0 || strcmp(argv[i], "-q") == 0))
+        {
+            QUIET_ARG = "";
+        }
+        else if (strcmp(argv[i], "--debug") == 0)
+        {
+            DEBUG_ARG = "";
+        }
+        else if ((strcmp(argv[i], "--template-folder") == 0 || strcmp(argv[i], "-f") == 0))
+        {
+            if (i + 1 < argc)
+                TEMPLATE_FOLDER_ARG = argv[++i];
+            else {
+                argc = -1;
+            }
         }
         else if ((strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0))
         {
@@ -464,18 +453,6 @@ int set_args(int argc, char *argv[])
             else
                 argc = -1;
         }
-        else if ((strcmp(argv[i], "--gray-scale") == 0 || strcmp(argv[i], "-g") == 0))
-        {
-            if (i + 1 < argc)
-            {
-                if (is_between_01_float(argv[++i]))
-                    GRAY_SCALE_ARG = strtod(argv[i], NULL);
-                else
-                    warn("Grayscale value have to be floating point number between 0-1!, skipping argument.");
-            }
-            else
-                argc = -1;
-        }
         else if ((strcmp(argv[i], "--dark-offset") == 0 || strcmp(argv[i], "-n") == 0))
         {
             if (i + 1 < argc)
@@ -500,6 +477,50 @@ int set_args(int argc, char *argv[])
             else
                 argc = -1;
         }
+        else if ((strcmp(argv[i], "--gray-scale") == 0 || strcmp(argv[i], "-g") == 0))
+        {
+            if (i + 1 < argc)
+            {
+                if (is_between_01_float(argv[++i]))
+                    GRAY_SCALE_ARG = strtod(argv[i], NULL);
+                else
+                    warn("Grayscale value have to be floating point number between 0-1!, skipping argument.");
+            }
+            else
+                argc = -1;
+        }
+        else if (strcmp(argv[i], "--static-background") == 0)
+        {
+            if (i + 1 < argc)
+            {
+                STATIC_BG_ARG = calloc(1, sizeof(RGB));
+                if (!hex_to_rgb(argv[++i], STATIC_BG_ARG))
+                {
+                    free(STATIC_BG_ARG);
+                    err("Failed to parse static background: %s", argv[i-1]);
+                }
+            }
+            else
+            {
+                argc = -1;
+            }
+        }
+        else if (strcmp(argv[i], "--static-foreground") == 0)
+        {
+            if (i + 1 < argc)
+            {
+                STATIC_FG_ARG = calloc(1, sizeof(RGB));
+                if (!hex_to_rgb(argv[++i], STATIC_FG_ARG))
+                {
+                    free(STATIC_FG_ARG);
+                    err("Failed to parse static foreground: %s", argv[i-1]);
+                }
+            }
+            else
+            {
+                argc = -1;
+            }
+        }
         else {
             eu("Unknown option: %s", argv[i]);
         }
@@ -515,8 +536,13 @@ int set_args(int argc, char *argv[])
     if (IMAGE_ARG == NULL && THEME_ARG == NULL && ((THEME_FOLDER_ARG == NULL || TEMPLATE_FOLDER_ARG == NULL) && RANDOM_ARG == NULL))
         err("You have to provide image file or theme!:\t--image, \n\t--theme, \n\t");
 
-    if (THEME_ARG != NULL && IMAGE_ARG != NULL)
-        err("you cannot use both --image and --theme");
+    if ((THEME_ARG != NULL || THEME_FOLDER_ARG != NULL) && IMAGE_ARG != NULL)
+    {
+        if (THEME_FOLDER_ARG != NULL)
+            err("you cannot use both --image and --theme-folder");
+        else
+            err("you cannot use both --image and --theme");
+    }
 
     if (RANDOM_ARG != NULL && THEME_ARG != NULL)
         warn("specified theme is not used: \"%s\"", THEME_ARG);
@@ -1007,9 +1033,6 @@ void invert_palette(PALETTE *p)
 
 RGB apply_grayscale(RGB c)
 {
-    if (GRAY_SCALE_ARG == -1)
-        return c;
-
     return saturate_color(c, GRAY_SCALE_ARG);
 }
 
@@ -1114,16 +1137,24 @@ void apply_addtional_arguments(PALETTE *p)
     if (INVERT_ARG != NULL)
         invert_palette(p);
 
-    if (OFFSET_GLOBAL != 0 && GRAY_SCALE_ARG != 0)
-    for (int i = 0; i < PALETTE_SIZE; i++) {
-        /* apply offsets */
-        if (OFFSET_GLOBAL != 0)
-            p->colors[i] = apply_offsets(p->colors[i]);
+    if (OFFSET_GLOBAL != 0 || GRAY_SCALE_ARG != -1)
+    {
+        for (int i = 0; i < PALETTE_SIZE; i++)
+        {
+            /* apply offsets */
+            if (OFFSET_GLOBAL != 0)
+                p->colors[i] = apply_offsets(p->colors[i]);
 
-        /* apply grayscale value */
-        if (GRAY_SCALE_ARG != 0)
-            p->colors[i] = apply_grayscale(p->colors[i]);
+            /* apply grayscale value */
+            if (GRAY_SCALE_ARG != -1)
+                p->colors[i] = apply_grayscale(p->colors[i]);
+        }
     }
+
+    if (STATIC_BG_ARG != NULL)
+        p->colors[0] = *STATIC_BG_ARG;
+    if (STATIC_FG_ARG != NULL)
+        p->colors[PALETTE_SIZE-1] = *STATIC_FG_ARG;
 }
 
 void palette_handle_color_mode(PALETTE *p)
@@ -1386,7 +1417,7 @@ void img_free(IMG *img)
  * Manipulate special colors.
  *   10 = foreground,
  *   11 = background,
- *   12 = cursor foregound,
+ *   12 = cursor foreground,
  *   13 = mouse foreground,
  *   708 = terminal border background
  *
@@ -1394,8 +1425,6 @@ void img_free(IMG *img)
  */
 void set_term_colors(PALETTE pal)
 {
-    log_c("Setting terminals...");
-
     char buffer[1024];
     size_t offset = 0;
 
@@ -1424,13 +1453,18 @@ void set_term_colors(PALETTE pal)
     offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_s, 708, border_color);
 
     /* Broadcast the sequences to all terminal devices */
+    size_t succ = 0;
     glob_t globbuf;
-    if (glob("/dev/pts/*", GLOB_NOSORT, NULL, &globbuf) == 0) {
-        for (size_t i = 0; i < globbuf.gl_pathc; i++) {
+    if (glob("/dev/pts/*", GLOB_NOSORT, NULL, &globbuf) == 0)
+    {
+        for (size_t i = 0; i < globbuf.gl_pathc; i++)
+        {
             FILE *f = fopen(globbuf.gl_pathv[i], "w");
-            if (f) {
+            if (f)
+            {
                 fwrite(buffer, 1, offset, f);
                 fclose(f);
+                succ++;
             }
         }
         globfree(&globbuf);
@@ -1439,7 +1473,7 @@ void set_term_colors(PALETTE pal)
     /* Also write to the current terminal */
     fwrite(buffer, 1, offset, stdout);
 
-    log_c("...All set!\n");
+    log_c("Set colors to [%d] terminals!", succ+1);
 }
 
 /* 
@@ -1496,7 +1530,7 @@ void process_templating(PALETTE pal)
         t_success += template_write(templates[i], OUTPUT_ARG);
     }
 
-    log_c("Sucessfully processed %d templates!", t_success);
+    log_c("Processed [%d/%d] templates!", t_success, templates_count);
 }
 
 /* load t->path file to buffer and replaces content between delim with colors from PALETTE colors */
@@ -1550,7 +1584,8 @@ void process_template(TEMPLATE *t, PALETTE pal)
                     if (pd == NULL)
                         err("Failed to allocate parser");
                         
-                    if (hell_parser_delim(pd, '.', 1) == HELL_PARSER_OK) {
+                    if (hell_parser_delim(pd, '.', 1) == HELL_PARSER_OK)
+                    {
                         size_t l_size = pd->pos - 1;
                         size_t r_size = pd->length - pd->pos;
 
@@ -1593,7 +1628,8 @@ void process_template(TEMPLATE *t, PALETTE pal)
                         free(left);
                         free(right);
                     }
-                    else if (!strcmp(delim_buf, "wallpaper")) /* check if an argument stands for wallpaper path */
+                    /* check if an argument stands for wallpaper path */
+                    else if (!strcmp(delim_buf, "wallpaper"))
                     {
                         if (IMAGE_ARG != NULL)
                         {
@@ -1605,6 +1641,7 @@ void process_template(TEMPLATE *t, PALETTE pal)
                         else
                             var_arg = "";
                     }
+                    /* check other keywords */
                     else if (!strcmp(delim_buf, "foreground") || !strcmp(delim_buf, "cursor") || !strcmp(delim_buf, "border"))
                         var_arg = palette_color(pal, 15, "%02x%02x%02x");
                     else if (!strcmp(delim_buf, "background"))
@@ -1909,14 +1946,23 @@ PALETTE process_themeing(char *theme)
  ***/
 int main(int argc, char **argv)
 {
+    /* read cmd line arguments, and set default ones */
     if (set_args(argc,argv) != 0)
         err("arguments error");
 
+    /* generate palette from image or theme */
     PALETTE pal = get_color_palette(pal);
+
+    /* apply theme'ing options liek --light, --color, --gray-scale 0.5 */
     apply_addtional_arguments(&pal);
+
+    /* print palette colors as blocks*/
     print_palette(pal);
 
+    /* set terminal colors using ANSI escape codes */
     set_term_colors(pal);
+
+    /* read template files, process them and write results to --output */
     process_templating(pal);
 
     /* Run script or command from --script argument */
