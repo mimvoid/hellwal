@@ -3,7 +3,7 @@
 <p align="center">
     <p>Showcase with <a href="https://github.com/danihek/Themecord">Themecord</a> and <a href="https://github.com/LGFae/swww">swww</a></p>
     <img src="https://github.com/user-attachments/assets/e46ab2c0-0c66-4275-859e-c4bf24056985" alt="Preview" width="1200">
-</p>                                             
+</p>
 
 ## Installation
 

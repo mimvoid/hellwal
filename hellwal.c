@@ -3,14 +3,13 @@
  *  [ ] TODO: gtk css?
  *  [ ] TODO: config ( is it really needed? )                               
  *  [ ] TODO: support for other OS's like Mac or Win                        
- *  [ ] TODO: bright & dark offset value as cmd line argument               
- *  [ ] TODO: cmd line arg to manipulate variety of different colors        
  *  [ ] TODO: handle exception: unclosed delim
  *  ------------------------------------------------------------------------
  *  [x] TODO: tweaking options for generated colors (func + dark-light mode 
+ *  [x] TODO: bright & dark offset value as cmd line argument               
  *  [x] TODO: support for already built themes (like gruvbox etc.)          
  *  [x] TODO: do more pleasant color schemes                                
- *  [x] TODO: better light theme
+ *  [x] TODO: better light theme                                            
  *  [x] TODO: print proper program usage                                    
  *  [x] TODO: -r for random                                                 
  *  [x] TODO: -s for scripts                                                
@@ -20,10 +19,13 @@
  *
  *
  * changelog v1.0.1:
- *  - arguably better light mode
  *  - fixed loading incorrect number of channels from image, this casued unmatched palette
- *  - added gray-scale argument to manipulate 'grayness' of color palette
- *  - added '--debug' cmd line argument for more verbose output
+ *  - added proper support for light mode
+ *  - added --debug cmd line argument for more verbose output
+ *  - added --dark-offset and --bright-offset cmd line arguments
+ *  - added --inverted cmd line argument, it inverts color palette colors
+ *  - added --color -c argument. Now we have 3 modes: dark, light and color
+ *  - added --gray-scale argument to manipulate 'grayness' of color palette
  *
  * changelog v1.0.0:
  *  - first decent verision to release.
@@ -74,6 +76,7 @@
  */
 
 
+#include <math.h>
 #include <time.h>
 #include <glob.h>
 #include <fcntl.h>
@@ -187,9 +190,10 @@ char *IMAGE_ARG = NULL;
  */
 char *QUIET_ARG = NULL;
 
-/* darkmode or lightmode, darkmode is default */
+/* darkmode, lightmode and colormode - darkmode is default */
 char *DARK_ARG  = NULL;
 char *LIGHT_ARG = NULL;
+char *COLOR_ARG = NULL;
 
 /* folder that contains templates */
 char *TEMPLATE_FOLDER_ARG = NULL;
@@ -219,36 +223,16 @@ char *DEBUG_ARG = NULL;
 /* run script after successfull hellwal job */
 char *SCRIPT_ARG = NULL;
 
+/* invert color palette colors */
+char *INVERT_ARG = NULL;
+
 /* defines 'grayness' of colorpalette */
 float GRAY_SCALE_ARG = -1;
 
 /* defines offsets to manipulate darkness and brightness */
 float BRIGHTNESS_OFFSET_ARG = -1;
 float DARKNESS_OFFSET_ARG = -1;
-
-/* one palette as global variable, so log_c() can access colors
- * 1 = log
- * 2 = err
- * 3 = warn
- * */
-size_t pal_log_iter = 1;
-PALETTE pal_log = {
-    /* log */
-    .colors[1].R = 235,
-    .colors[1].G = 255,
-    .colors[1].B = 235,
-
-    /* warn */
-    .colors[2].R = 235,
-    .colors[2].G = 255,
-    .colors[2].B = 10,
-
-    /* err */
-    .colors[3].R = 235,
-    .colors[3].G = 20,
-    .colors[3].B = 5
- };
-
+float OFFSET_GLOBAL = 0;
 
 /*** 
  * FUNCTIONS DECLARATIONS
@@ -295,6 +279,8 @@ int compare_luminance(const void *a, const void *b);
 int get_channel(RGB *colors, size_t start, size_t end, int channel);
 int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
 
+RGB apply_offsets(RGB c);
+RGB apply_grayscale(RGB c);
 RGB to_grayscale(RGB color);
 RGB darken_color(RGB color, float factor);
 RGB lighten_color(RGB color, float factor);
@@ -305,18 +291,22 @@ RGB average_color(IMG *img, size_t start, size_t end);
 RGB blend_colors(const RGB color1, const RGB color2, float blend_factor);
 RGB blend_with_brightness(RGB bright_color, RGB mix_color, float mix_ratio);
 
-/* term */
+/* term, set for all active terminals ANSI escape codes */
 void set_term_colors(PALETTE pal);
 
 /* palettes */
 PALETTE gen_palette(IMG *img);
-void gen_palette_handle_dark_mode(PALETTE *p);
-void gen_palette_handle_light_mode(PALETTE *p);
+PALETTE get_color_palette(PALETTE p);
+void apply_addtional_arguments(PALETTE *p);
+char *palette_color(PALETTE pal, unsigned c, char *fmt);
 
+void invert_palette(PALETTE *p);
 void print_palette(PALETTE pal);
 void reverse_palette(PALETTE *palette);
+void palette_handle_dark_mode(PALETTE *p);
+void palette_handle_light_mode(PALETTE *p);
+void palette_handle_color_mode(PALETTE *p);
 void sort_palette_by_luminance(PALETTE *palette);
-char *palette_color(PALETTE pal, unsigned c, char *fmt);
 
 /* templates */
 char *load_file(char *filename);
@@ -337,36 +327,47 @@ int process_theme(char *t, PALETTE *pal);
  /* prints usage to stdout */
 void hellwal_usage(const char *name)
 {
-    printf("Usage:\n\t%s [OPTIONS]\n", name);
+    printf("Usage:\n\t%s -i <image> [OPTIONS]\n", name);
     printf("Options:\n");
-    printf("  --image,           -i <image>     Set image file.\n");
-    printf("  --dark,            -d             Set dark mode (ON by default).\n");
-    printf("  --light,           -l             Set light mode.\n");
-    printf("  --quiet,           -q             Suppress output.\n");
-    printf("  --script,          -s             Execute script after running hellwal.\n");
-    printf("  --random,          -r             Pick random image or theme from directory.\n");
-    printf("  --template-folder, -f <folder>    Set folder containing templates.\n");
-    printf("  --output,          -o <folder>    Set output folder for generated templates.\n");
-    printf("  --theme,           -t <file>      Set theme from theme folder or path to theme file.\n");
-    printf("  --theme-folder,    -k <folder>    Set folder containing themes.\n");
-    printf("  --help,            -h             Display this help and exit.\n");
+    printf("  --image,           -i <image>       Set image file\n");
+    printf("  --dark,            -d               Set dark mode (ON by default)\n");
+    printf("  --light,           -l               Set light mode\n");
+    printf("  --color,           -c               Set colorized mode (experimental)\n");
+    printf("  --quiet,           -q               Quiet. Suppress output\n");
+    printf("  --script,          -s <script>      Execute script after running hellwal\n");
+    printf("  --random,          -r               Pick random image or theme from directory\n");
+    printf("  --template-folder, -f <folder>      Set folder containing templates\n");
+    printf("  --output,          -o <folder>      Set output folder for generated templates\n");
+    printf("  --theme,           -t <file>        Set theme from theme folder or path to theme file\n");
+    printf("  --theme-folder,    -k <folder>      Set folder containing themes\n");
+    printf("  --gray-scale,      -g <value>       Apply grayscale filter (value between 0 and 1)\n");
+    printf("  --dark-offset,     -n <value>       Adjust darkness offset (value between 0 and 1)\n");
+    printf("  --bright-offset,   -b <value>       Adjust brightness offset (value between 0 and 1)\n");
+    printf("  --invert,          -v               Invert colors in the palette\n");
+    printf("  --help,            -h               Display this help and exit\n");
 
     printf("\nDetailed Description:\n");
-    printf("  --image: Path to the image used to create a color palette.\n");
-    printf("  --dark: Use dark mode colors (e.g., #000000).\n");
-    printf("  --light: Use light mode colors (e.g., #FFFFFF).\n");
-    printf("  --quiet: Suppress output messages.\n");
-    printf("  --script: Specify a script or shell command to execute after running hellwal.\n");
-    printf("  --random: Pick a random image or theme from a directory. Specify the directory using --image or --theme-folder.\n");
-    printf("  --template-folder: Folder containing templates to process for generating colors. Default: ~/.config/hellwal/templates.\n");
-    printf("  --output: Output folder for generated templates. Default: ~/.cache/hellwal/.\n");
-    printf("  --theme: Specify a theme name from the theme folder or provide a path to a theme file.\n");
-    printf("  --theme-folder: Folder containing themes. Default: ~/.config/hellwal/themes/.\n");
+    printf("  --image: Path to the image used to create a color palette\n");
+    printf("  --dark: Use dark mode colors (default mode)\n");
+    printf("  --light: Use light mode colors\n");
+    printf("  --color: Use colorized background and foreground for text elements\n");
+    printf("  --quiet: Suppress output messages\n");
+    printf("  --script: Specify a script or shell command to execute after running hellwal\n");
+    printf("  --random: Pick a random image or theme from a directory. Specify the directory using --image or --theme-folder\n");
+    printf("  --template-folder: Folder containing templates to process for generating colors. Default: ~/.config/hellwal/templates\n");
+    printf("  --output: Output folder for generated templates. Default: ~/.cache/hellwal/\n");
+    printf("  --theme: Specify a theme name from the theme folder or provide a path to a theme file\n");
+    printf("  --theme-folder: Folder containing themes. Default: ~/.config/hellwal/themes/\n");
+    printf("  --gray-scale: Apply a grayscale filter to the palette. Value must be a float between 0 and 1\n");
+    printf("  --dark-offset: Adjust the darkness offset. Value must be a float between 0 and 1\n");
+    printf("  --bright-offset: Adjust the brightness offset. Value must be a float between 0 and 1\n");
+    printf("  --invert: Invert all colors in the generated palette\n");
 
     printf("\nNote for package manager installations:\n");
-    printf("Default templates and themes are pre-installed in /etc/hellwal/templates and /etc/hellwal/themes.\n");
+    printf("Default templates and themes are pre-installed in /usr/share/docs/hellwal/templates and /usr/share/docs/hellwal/themes\n");
     printf("You can copy these to your configuration directory.\n");
 }
+
 
 /* set given arguments */
 int set_args(int argc, char *argv[])
@@ -413,6 +414,11 @@ int set_args(int argc, char *argv[])
             /* anything other than NULL, makes light mode */
             LIGHT_ARG = "";
         }
+        else if ((strcmp(argv[i], "--color") == 0 || strcmp(argv[i], "-c") == 0))
+        {
+            /* anything other than NULL, makes color mode */
+            COLOR_ARG = "";
+        }
         else if ((strcmp(argv[i], "--random") == 0 || strcmp(argv[i], "-r") == 0))
         {
             /* anything other than NULL, triggers */
@@ -422,6 +428,10 @@ int set_args(int argc, char *argv[])
         {
             /* anything other than NULL, triggers */
             DEBUG_ARG = "";
+        }
+        else if ((strcmp(argv[i], "--invert") == 0 || strcmp(argv[i], "-v") == 0))
+        {
+            INVERT_ARG = "";
         }
         else if ((strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0))
         {
@@ -503,7 +513,7 @@ int set_args(int argc, char *argv[])
         err("you have to specify --image to provide image folder or --theme-folder to use RANDOM");
 
     if (IMAGE_ARG == NULL && THEME_ARG == NULL && ((THEME_FOLDER_ARG == NULL || TEMPLATE_FOLDER_ARG == NULL) && RANDOM_ARG == NULL))
-        err("You have to provide one of these:\n\t--image, \n\t--theme, \n\t--random");
+        err("You have to provide image file or theme!:\t--image, \n\t--theme, \n\t");
 
     if (THEME_ARG != NULL && IMAGE_ARG != NULL)
         err("you cannot use both --image and --theme");
@@ -512,7 +522,7 @@ int set_args(int argc, char *argv[])
         warn("specified theme is not used: \"%s\"", THEME_ARG);
 
     if (THEME_ARG == NULL && THEME_FOLDER_ARG != NULL && RANDOM_ARG == NULL)
-        warn("specified theme folder is not used: \"%s\", you have to provide --theme", THEME_FOLDER_ARG);
+        warn("specified theme folder is not used: \"%s\", you also have to provide --theme", THEME_FOLDER_ARG);
 
     /* if RANDOM, get file */
     if (RANDOM_ARG != NULL)
@@ -522,6 +532,16 @@ int set_args(int argc, char *argv[])
         else
             THEME_ARG = rand_file(THEME_FOLDER_ARG);
     }
+
+    /* if mode is not set, set DARK as default */
+    if (LIGHT_ARG == NULL && COLOR_ARG == NULL && DARK_ARG == NULL)
+        DARK_ARG = "";
+
+    /* set offset values - you can provide both, but they will interfier with each other */
+    if (DARKNESS_OFFSET_ARG != -1)
+        OFFSET_GLOBAL -= DARKNESS_OFFSET_ARG;
+    if (BRIGHTNESS_OFFSET_ARG != -1)
+        OFFSET_GLOBAL += BRIGHTNESS_OFFSET_ARG;
 
     /* If not specified, set default ones */
     SET_DEF(OUTPUT_ARG, "~/.cache/hellwal/");
@@ -537,10 +557,7 @@ int set_args(int argc, char *argv[])
  */
 void eu(const char *format, ...)
 {
-    fprintf(stderr, "\033[38;2;%d;%d;%dm[ERROR]: ",
-            pal_log.colors[3].R,
-            pal_log.colors[3].G,
-            pal_log.colors[3].B);
+    fprintf(stderr, "\033[91m[ERROR]: ");
 
     va_list ap;
     va_start(ap, format);
@@ -560,10 +577,7 @@ void err(const char *format, ...)
     va_list ap;
     va_start(ap, format);
 
-    fprintf(stderr, "\033[38;2;%d;%d;%dm[ERROR]: ",
-            pal_log.colors[3].R,
-            pal_log.colors[3].G,
-            pal_log.colors[3].B);
+    fprintf(stderr, "\033[91m[ERROR]: ");
     vfprintf(stderr, format, ap);
     fprintf(stderr, "\033[0m");
 
@@ -578,10 +592,7 @@ void warn(const char *format, ...)
 {
     va_list ap;
     va_start(ap, format);
-    fprintf(stderr, "\033[38;2;%d;%d;%dm[WARN]: ",
-            pal_log.colors[2].R,
-            pal_log.colors[2].G,
-            pal_log.colors[2].B);
+    fprintf(stderr, "\033[93m[WARN]: ");
 
     vfprintf(stderr, format, ap);
     fprintf(stderr, "\033[0m");
@@ -598,21 +609,15 @@ void log_c(const char *format, ...)
     va_list ap;
     va_start(ap, format);
 
-    fprintf(stdout, "\033[38;2;%d;%d;%dm[INFO]: ",
-            pal_log.colors[pal_log_iter].R,
-            pal_log.colors[pal_log_iter].G,
-            pal_log.colors[pal_log_iter].B);
+    const char *default_color = "\033[96m";
+
+    fprintf(stdout, "%s[INFO]: ", default_color);
 
     vfprintf(stdout, format, ap);
     fprintf(stdout, "\033[0m");
 
     va_end(ap);
     fprintf(stdout, "\n");
-
-    if (pal_log_iter != 1)
-        pal_log_iter+=4;
-    if (pal_log_iter > PALETTE_SIZE)
-        pal_log_iter = 2;
 }
 
 /* get full path from '~/' or other relative paths */
@@ -915,10 +920,13 @@ RGB blend_with_brightness(RGB bright_color, RGB mix_color, float mix_ratio)
     blended.G = bright_color.G + mix_ratio * (mix_color.G - bright_color.G);
     blended.B = bright_color.B + mix_ratio * (mix_color.B - bright_color.B);
 
-    uint8_t max_channel = blended.R > blended.G ? (blended.R > blended.B ? blended.R : blended.R) : (blended.G > blended.B ? blended.G : blended.B);
-    if (max_channel < 255)
+    uint8_t max_channel = blended.R > blended.G ? 
+                          (blended.R > blended.B ? blended.R : blended.B) : 
+                          (blended.G > blended.B ? blended.G : blended.B);
+
+    if (max_channel > 0 && max_channel < 255)
     {
-        float adjustment = 255.0f / max_channel;
+        float adjustment = 255.0f / (float)max_channel;
         blended.R = (uint8_t)(blended.R * adjustment);
         blended.G = (uint8_t)(blended.G * adjustment);
         blended.B = (uint8_t)(blended.B * adjustment);
@@ -926,6 +934,7 @@ RGB blend_with_brightness(RGB bright_color, RGB mix_color, float mix_ratio)
 
     return blended;
 }
+
 
 /* calculate the average color of a given pixel range in an image */
 RGB average_color(IMG *img, size_t start, size_t end) 
@@ -981,6 +990,41 @@ RGB lighten_color(RGB color, float factor)
 RGB darken_color(RGB color, float factor)
 {
     return adjust_luminance(color, 1.0f - factor);
+}
+
+void invert_palette(PALETTE *p)
+{
+    if (p == NULL)
+        return;
+
+    for (int i = 0; i < PALETTE_SIZE; i++)
+    {
+        p->colors[i].R = 255 - p->colors[i].R;
+        p->colors[i].G = 255 - p->colors[i].G;
+        p->colors[i].B = 255 - p->colors[i].B;
+    }
+}
+
+RGB apply_grayscale(RGB c)
+{
+    if (GRAY_SCALE_ARG == -1)
+        return c;
+
+    return saturate_color(c, GRAY_SCALE_ARG);
+}
+
+/* if user provided OFFSET value, apply it to color */
+RGB apply_offsets(RGB c)
+{
+    if (OFFSET_GLOBAL == 0)
+        return c;
+
+    if (OFFSET_GLOBAL < 0)
+        c = darken_color(c, -1 * OFFSET_GLOBAL);
+    else if (OFFSET_GLOBAL > 0)
+        c = lighten_color(c, 0.25f + OFFSET_GLOBAL);
+
+    return c;
 }
 
 /* part of median algo */
@@ -1042,50 +1086,86 @@ void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, si
     }
 }
 
-void gen_palette_handle_light_mode(PALETTE *p)
+PALETTE get_color_palette(PALETTE p)
+{
+    if (THEME_ARG)
+        p = process_themeing(THEME_ARG); /* if true, program end's here */
+    else {
+        IMG *img = img_load(IMAGE_ARG);
+        p = gen_palette(img);
+        img_free(img);
+    }
+
+    return p;
+}
+
+void apply_addtional_arguments(PALETTE *p)
+{
+
+    /* Handle dark/light or color mode */
+    if (DARK_ARG  != NULL)
+        palette_handle_dark_mode(p);
+    if (LIGHT_ARG != NULL)
+        palette_handle_light_mode(p);
+    if (COLOR_ARG != NULL)
+        palette_handle_color_mode(p);
+
+    /* invert palette, if INVERT_ARG */
+    if (INVERT_ARG != NULL)
+        invert_palette(p);
+
+    if (OFFSET_GLOBAL != 0 && GRAY_SCALE_ARG != 0)
+    for (int i = 0; i < PALETTE_SIZE; i++) {
+        /* apply offsets */
+        if (OFFSET_GLOBAL != 0)
+            p->colors[i] = apply_offsets(p->colors[i]);
+
+        /* apply grayscale value */
+        if (GRAY_SCALE_ARG != 0)
+            p->colors[i] = apply_grayscale(p->colors[i]);
+    }
+}
+
+void palette_handle_color_mode(PALETTE *p)
 {
     if (p == NULL)
         return;
 
-    for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
-        p->colors[i] = lighten_color(p->colors[i - PALETTE_SIZE / 2], 0.2);
+    RGB temp_color_0  = darken_color(p->colors[0], 0.1);
+    RGB temp_color_7  = lighten_color(p->colors[14], 0.2);
+    RGB temp_color_14 = darken_color(p->colors[7], 0.3);
+    RGB temp_color_15 = lighten_color(p->colors[15], 0.5);
 
-    RGB temp_color_0 =  blend_with_brightness(saturate_color(lighten_color(p->colors[15], 0.6), 0.6), p->colors[5], 0.2f);
-    RGB temp_color_7 =  darken_color( p->colors[7], 0.5);
-    RGB temp_color_14 = p->colors[14];
-    RGB temp_color_15 = p->colors[0];
-
-    reverse_palette(p);
-
-    p->colors[14] = darken_color(p->colors[14], 0.3f);
-
-    p->colors[0] = temp_color_0;
-    p->colors[7] = temp_color_15;
-    p->colors[14] = temp_color_7;
+    p->colors[0] = temp_color_7;
+    p->colors[7] = temp_color_0;
+    p->colors[14] = temp_color_15;
     p->colors[15] = temp_color_14;
 }
 
-void gen_palette_handle_dark_mode(PALETTE *p)
+void palette_handle_light_mode(PALETTE *p)
+{
+    if (p == NULL)
+        return;
+
+    RGB temp_color_0 =  blend_with_brightness(saturate_color(lighten_color(p->colors[15], 0.6), 0.6), p->colors[5], 0.2f);
+    RGB temp_color_7 =  darken_color(p->colors[7], 0.5);
+    RGB temp_color_13 = lighten_color(p->colors[13], 0.6);
+    RGB temp_color_14 = darken_color(p->colors[14], 0.5);
+    RGB temp_color_15 = lighten_color(p->colors[0], 0.4);
+
+    reverse_palette(p);
+
+    p->colors[0] = temp_color_0;
+    p->colors[7] = temp_color_7;
+    p->colors[13] = temp_color_13;
+    p->colors[14] = temp_color_14;
+    p->colors[15] = temp_color_15;
+}
+
+void palette_handle_dark_mode(PALETTE *p)
 {
     if (p==NULL)
         return;
-
-    /* UNINMPLEMENTED */
-    //float offset = 0;
-    //if (DARKNESS_OFFSET_ARG != -1)
-    //    offset -= DARKNESS_OFFSET_ARG;
-    //if (BRIGHTNESS_OFFSET_ARG != -1)
-    //    offset += BRIGHTNESS_OFFSET_ARG;
-
-    for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
-    {
-        //if (offset < 0)
-        //    p->colors[i - PALETTE_SIZE / 2] = darken_color(p->colors[i - PALETTE_SIZE / 2], -1.f * offset);
-        //else if (offset > 0)
-        //    p->colors[i] = lighten_color(p->colors[i - PALETTE_SIZE / 2], 0.25f + offset);
-        //else
-        p->colors[i] = lighten_color(p->colors[i - PALETTE_SIZE / 2], 0.25f);
-    }
 
     p->colors[0] = darken_color(p->colors[0], 0.7f);    // BG
     p->colors[15] = lighten_color(p->colors[15], 0.5f); // FG
@@ -1149,17 +1229,23 @@ PALETTE gen_palette(IMG *img)
         RGB bin_color = bin_to_color(top_bins[i].r_bin, top_bins[i].g_bin, top_bins[i].b_bin);
         RGB blended_colors = blend_colors(avg_color, bin_color, 0.5f);
 
-        if (GRAY_SCALE_ARG != -1)
-            blended_colors = saturate_color(blended_colors, GRAY_SCALE_ARG);
-
         if (DEBUG_ARG != NULL)
         {
+            printf("(%d, %d, %d)", avg_color.R, avg_color.G, avg_color.B);
+            printf(" - ");
+            printf("(%d, %d, %d)", bin_color.R, bin_color.G, bin_color.B);
+            printf(" = ");
+            printf("(%d, %d, %d)", blended_colors.R, blended_colors.G, blended_colors.B);
+            printf("\n");
+
             print_rgb(avg_color);
             printf(" - ");
             print_rgb(bin_color);
             printf(" = ");
             print_rgb(blended_colors);
-            printf("\n");
+
+            printf("\nLUM: %f", calculate_luminance(blended_colors));
+            printf("\n\n");
         }
 
         palette.colors[num_colors++] = blended_colors;
@@ -1188,23 +1274,13 @@ PALETTE gen_palette(IMG *img)
         else
             new_color = blend_colors(new_color, palette.colors[j], 0.5);
 
-        if (GRAY_SCALE_ARG != -1)
-            new_color = saturate_color(new_color, GRAY_SCALE_ARG);
-
         palette.colors[num_colors++] = new_color;
     }
 
-    /* 
-     * if user provided LIGHT_ARG, make some changes
-     * to make it look better
-     */
     sort_palette_by_luminance(&palette);
 
-    /* Handle dark/light mode */
-    if (LIGHT_ARG != NULL)
-        gen_palette_handle_light_mode(&palette);
-    else
-        gen_palette_handle_dark_mode(&palette);
+    for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
+        palette.colors[i] = lighten_color(palette.colors[i - PALETTE_SIZE / 2], 0.25f);
 
     return palette;
 }
@@ -1259,7 +1335,6 @@ void print_palette_gray_scale_iter(IMG *img, size_t iter)
     for (size_t i = 0; i < iter; i++)
     {
         GRAY_SCALE_ARG = (float)i == 0 ? 0 : (float)((float)i/iter);
-        pal = gen_palette(img);
 
         sort_palette_by_luminance(&pal);
 
@@ -1281,7 +1356,7 @@ IMG *img_load(char *filename)
     int numberOfChannels;
     int forcedNumberOfChannels = 3;
 
-    uint8_t *imageData = stbi_load(filename, &width, &height, &numberOfChannels, forcedNumberOfChannels); /* fix BAD number of channels. It causes unmatched and inaccurate colors */
+    uint8_t *imageData = stbi_load(filename, &width, &height, &numberOfChannels, forcedNumberOfChannels);
 
     if (imageData == 0) err("Error while loading the file: %s", filename);
 
@@ -1826,8 +1901,6 @@ PALETTE process_themeing(char *theme)
     else
         err("Theme not found: %s", theme);
 
-    pal_log = pal;
-    pal_log_iter = 2;
     return pal;
 }
 
@@ -1839,20 +1912,10 @@ int main(int argc, char **argv)
     if (set_args(argc,argv) != 0)
         err("arguments error");
 
-    PALETTE pal;
-
-
-    if (THEME_ARG)
-        pal = process_themeing(THEME_ARG); /* if true, program end's here */
-    else 
-    {
-        IMG *img = img_load(IMAGE_ARG);
-        pal = gen_palette(img);
-        img_free(img);
-    }
-
-    sort_palette_by_luminance(&pal);
+    PALETTE pal = get_color_palette(pal);
+    apply_addtional_arguments(&pal);
     print_palette(pal);
+
     set_term_colors(pal);
     process_templating(pal);
 
