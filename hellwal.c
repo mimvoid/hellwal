@@ -534,7 +534,7 @@ int set_args(int argc, char *argv[])
         err("you have to specify --image to provide image folder or --theme-folder to use RANDOM");
 
     if (IMAGE_ARG == NULL && THEME_ARG == NULL && ((THEME_FOLDER_ARG == NULL || TEMPLATE_FOLDER_ARG == NULL) && RANDOM_ARG == NULL))
-        err("You have to provide image file or theme!:\t--image, \n\t--theme, \n\t");
+        err("You have to provide image file or theme!:  --image,  --theme, \n\t");
 
     if ((THEME_ARG != NULL || THEME_FOLDER_ARG != NULL) && IMAGE_ARG != NULL)
     {
