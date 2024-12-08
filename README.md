@@ -142,16 +142,15 @@ sh ~/.cache/hellwal/terminal.sh
 ### TODO
 
 - [ ] TODO: gtk css?
-- [ ] TODO: better light theme
 - [ ] TODO: config ( is it really needed? )                               
 - [ ] TODO: support for other OS's like Mac or Win                        
-- [ ] TODO: bright & dark offset value as cmd line argument               
-- [ ] TODO: cmd line arg to manipulate variety of different colors        
-- [ ] TODO: handle exception: unclosed delim
+- [ ] TODO: handle exception or warn: unclosed delim
 --------------------------------------------------------------------------
 - [x] TODO: tweaking options for generated colors (func + dark-light mode 
+- [x] TODO: bright & dark offset value as cmd line argument               
 - [x] TODO: support for already built themes (like gruvbox etc.)          
 - [x] TODO: do more pleasant color schemes                                
+- [x] TODO: better light theme                                            
 - [x] TODO: print proper program usage                                    
 - [x] TODO: -r for random                                                 
 - [x] TODO: -s for scripts                                                
