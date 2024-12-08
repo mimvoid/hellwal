@@ -1,4 +1,4 @@
-# hellwal - fast, extensible color palette generator
+# Hellwal - Fast, Extensible Color Palette Generator
 
 <p align="center">
     <p>Showcase with <a href="https://github.com/danihek/Themecord">Themecord</a> and <a href="https://github.com/LGFae/swww">swww</a></p>
@@ -13,7 +13,7 @@ To install from **AUR**, run:
 yay -S hellwal
 ```
 
-Or get a binary: go to [releases](https://github.com/danihek/hellwal/releases) page and download the [hellwal](https://github.com/danihek/hellwal/releases/download/v1.0.0/hellwal) executable.
+Or get a binary: go to [releases](https://github.com/danihek/hellwal/releases) page and download the [hellwal](https://github.com/danihek/hellwal/releases/download/v1.0.1/hellwal) executable.
 
 ## Building
 

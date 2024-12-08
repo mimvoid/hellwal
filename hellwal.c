@@ -961,7 +961,6 @@ RGB blend_with_brightness(RGB bright_color, RGB mix_color, float mix_ratio)
     return blended;
 }
 
-
 /* calculate the average color of a given pixel range in an image */
 RGB average_color(IMG *img, size_t start, size_t end) 
 {
