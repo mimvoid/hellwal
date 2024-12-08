@@ -1,4 +1,4 @@
-VERSION = 1.0.0
+VERSION = 1.0.1
 
 CFLAGS = -Wall -Wextra -lm -O3
 DESTDIR = /usr/local/bin
