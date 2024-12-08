@@ -13,8 +13,6 @@ To install from **AUR**, run:
 yay -S hellwal
 ```
 
-Or get a binary: go to [releases](https://github.com/danihek/hellwal/releases) page and download the [hellwal](https://github.com/danihek/hellwal/releases/download/v1.0.1/hellwal) executable.
-
 ## Building
 
 Clone git repo, run make command and you are ready to go! - you just need C compiler and gnumake!
