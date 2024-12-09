@@ -77,7 +77,6 @@
  *   - added more example templates
  */
 
-
 #include <math.h>
 #include <time.h>
 #include <glob.h>
@@ -1499,7 +1498,14 @@ char *load_file(char *filename)
         return NULL;
     }
 
-    fread(buffer, 1, size, file);
+    int bytes_read = fread(buffer, 1, size, file);
+    if (bytes_read != size)
+    {
+        perror("Failed to read the complete file");
+        free(buffer);
+        fclose(file);
+        return NULL;
+    }
     buffer[size] = '\0';
 
     fclose(file);
@@ -1657,8 +1663,14 @@ void process_template(TEMPLATE *t, PALETTE pal)
                     if (var_arg != NULL) {
                         len = strlen(var_arg);
                         template_size += len + 1;
-                        template_buffer = realloc(template_buffer, template_size);
-                        if (template_buffer == NULL) return;
+
+                        char *temp_buffer = realloc(template_buffer, template_size);
+                        if (temp_buffer == NULL) {
+                            free(template_buffer);
+                            return;
+                        }
+                        template_buffer = temp_buffer;
+
                         strcat(template_buffer, var_arg);
                     }
                      
@@ -1751,20 +1763,22 @@ TEMPLATE **get_template_structure_dir(const char *dir_path, size_t *_size)
  * write generated template to dir,
  * returns 1 on success
  */
-size_t template_write(TEMPLATE *t, char *dir) {
+size_t template_write(TEMPLATE *t, char *dir)
+{
     if (t == NULL || dir == NULL) return 0;
     if (t->content == NULL) return 0;
 
-    char* path = malloc(strlen(dir) + strlen(t->name));
+    char* path = malloc(strlen(dir) + strlen(t->name) + 1);
     if (path)
         sprintf(path, "%s%s", dir, t->name);
     else
         return 0;
 
     FILE *f = fopen(path, "w");
-    if (f == NULL) {
-        perror(NULL);
-        warn("Cannot write to file: %s", t->path);
+    if (f == NULL)
+    {
+        warn("Cannot write to file: %s", path);
+        free(path);
         return 0;
     }
 
@@ -1774,6 +1788,8 @@ size_t template_write(TEMPLATE *t, char *dir) {
         log_c("  - wrote template to: %s\n", path);
 
     fclose(f);
+    free(path);
+
     return 1;
 }
 
