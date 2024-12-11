@@ -690,7 +690,7 @@ char* home_full_path(const char* path)
         const char* home = getenv("HOME");
         if (home)
         {
-            char* full_path = malloc(strlen(home) + strlen(path));
+            char* full_path = malloc(strlen(home) + strlen(path) + 1);
             if (full_path)
             {
                 sprintf(full_path, "%s%s", home, path + 1);
