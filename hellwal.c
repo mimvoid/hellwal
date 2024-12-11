@@ -1,9 +1,7 @@
 /*  hellwal - v1.0.0 - MIT LICENSE
  *
  *  [ ] TODO: gtk css?
- *  [ ] TODO: config ( is it really needed? )                               
  *  [ ] TODO: support for other OS's like Mac or Win                        
- *  [ ] TODO: handle exception: unclosed delim
  *  ------------------------------------------------------------------------
  *  [x] TODO: tweaking options for generated colors (func + dark-light mode 
  *  [x] TODO: bright & dark offset value as cmd line argument               
@@ -17,6 +15,11 @@
  *  [x] TODO: templating                                                    
  *  [x] TODO: parsing                                                       
  *
+ * changelog v1.0.2:
+ *  - changed rand() to arc4random()
+ *  - created palettes caching
+ *  - added '--no-cache' cmd line argument
+ *  - fixed applying addtional arguments for themes
  *
  * changelog v1.0.1:
  *  - fixed loading incorrect number of channels from image, this casued unmatched palette
@@ -226,6 +229,9 @@ char *DEBUG_ARG = NULL;
 /* run script after successfull hellwal job */
 char *SCRIPT_ARG = NULL;
 
+/* do not cache palette, do not read cached palettes */
+char *NO_CACHE_ARG = NULL;
+
 /* invert color palette colors */
 char *INVERT_ARG = NULL;
 
@@ -245,27 +251,29 @@ float OFFSET_GLOBAL = 0;
 
 /* default color template to save cached themes */
 char *CACHE_TEMPLATE = "\
-\\%\\% wallpaper \\%\\% = %% wallpaper %% \n\
-\\%\\% background = \\%\\% #%% background.hex %% \\%\\%\n\
-\\%\\% foreground = #%% foreground.hex %% \\%\\%\n\
-\\%\\% cursor = #%% cursor.hex %% \\%\\%\n\
-\\%\\% border = #%% border.hex %% \\%\\%\n\
-\\%\\% color0 = #%% color0.hex %% \\%\\%\n\
-\\%\\% color1 = #%% color1.hex %% \\%\\%\n\
-\\%\\% color2 = #%% color2.hex %% \\%\\%\n\
-\\%\\% color3 = #%% color3.hex %% \\%\\%\n\
-\\%\\% color4 = #%% color4.hex %% \\%\\%\n\
-\\%\\% color5 = #%% color5.hex %% \\%\\%\n\
-\\%\\% color6 = #%% color6.hex %% \\%\\%\n\
-\\%\\% color7 = #%% color7.hex %% \\%\\%\n\
-\\%\\% color8 = #%% color8.hex %% \\%\\%\n\
-\\%\\% color9 = #%% color9.hex %% \\%\\%\n\
-\\%\\% color10 = #%% color10.hex %% \\%\\%\n\
-\\%\\% color11 = #%% color11.hex %% \\%\\%\n\
-\\%\\% color12 = #%% color12.hex %% \\%\\%\n\
-\\%\\% color13 = #%% color13.hex %% \\%\\%\n\
-\\%\\% color14 = #%% color14.hex %% \\%\\%\n\
-\\%\\% color15 = #%% color15.hex %% \\%\\%";
+\\%\\%wallpaper = %% wallpaper %% \\%\\%\n\
+\
+\\%\\%background = #%% background %% \\%\\%\n\
+\\%\\%foreground = #%% foreground %% \\%\\%\n\
+\\%\\%cursor = #%% cursor %% \\%\\%\n\
+\\%\\%border = #%% border %% \\%\\%\n\
+\
+\\%\\%color0 = #%% color0.hex %% \\%\\%\n\
+\\%\\%color1 = #%% color1.hex %% \\%\\%\n\
+\\%\\%color2 = #%% color2.hex %% \\%\\%\n\
+\\%\\%color3 = #%% color3.hex %% \\%\\%\n\
+\\%\\%color4 = #%% color4.hex %% \\%\\%\n\
+\\%\\%color5 = #%% color5.hex %% \\%\\%\n\
+\\%\\%color6 = #%% color6.hex %% \\%\\%\n\
+\\%\\%color7 = #%% color7.hex %% \\%\\%\n\
+\\%\\%color8 = #%% color8.hex %% \\%\\%\n\
+\\%\\%color9 = #%% color9.hex %% \\%\\%\n\
+\\%\\%color10 = #%% color10.hex %% \\%\\%\n\
+\\%\\%color11 = #%% color11.hex %% \\%\\%\n\
+\\%\\%color12 = #%% color12.hex %% \\%\\%\n\
+\\%\\%color13 = #%% color13.hex %% \\%\\%\n\
+\\%\\%color14 = #%% color14.hex %% \\%\\%\n\
+\\%\\%color15 = #%% color15.hex %% \\%\\%\n";
 
 /*** 
  * FUNCTIONS DECLARATIONS
@@ -442,6 +450,10 @@ int set_args(int argc, char *argv[])
         {
             DEBUG_ARG = "";
         }
+        else if (strcmp(argv[i], "--no-cache") == 0)
+        {
+            NO_CACHE_ARG = "";
+        }
         else if ((strcmp(argv[i], "--template-folder") == 0 || strcmp(argv[i], "-f") == 0))
         {
             if (i + 1 < argc)
@@ -586,10 +598,6 @@ int set_args(int argc, char *argv[])
         else
             THEME_ARG = rand_file(THEME_FOLDER_ARG);
     }
-
-    /* if mode is not set, set DARK as default */
-    if (LIGHT_ARG == NULL && COLOR_ARG == NULL && DARK_ARG == NULL)
-        DARK_ARG = "";
 
     /* set offset values - you can provide both, but they will interfier with each other */
     if (DARKNESS_OFFSET_ARG != -1)
@@ -768,8 +776,7 @@ char *rand_file(char *path)
         err("No files found in directory: %s\n", path);
     }
 
-    srand(time(NULL));
-    size_t r_idx = rand() % count;
+    size_t r_idx = arc4random() % count;
     char *choosen = calloc(1, strlen(path) + strlen(files[r_idx] + 2));
     sprintf(choosen, "%s/%s", path, strdup(files[r_idx]));
 
@@ -1145,13 +1152,12 @@ PALETTE get_color_palette(PALETTE p)
     }
     else
     {
-        check_cached_palette(IMAGE_ARG, &p);
-
-        IMG *img = img_load(IMAGE_ARG);
-        p = gen_palette(img);
-        palette_write_cache(IMAGE_ARG, &p);
-
-        img_free(img);
+        if (!check_cached_palette(IMAGE_ARG, &p)) {
+            IMG *img = img_load(IMAGE_ARG);
+            p = gen_palette(img);
+            palette_write_cache(IMAGE_ARG, &p);
+            img_free(img);
+        }
     }
 
     return p;
@@ -1159,8 +1165,11 @@ PALETTE get_color_palette(PALETTE p)
 
 void apply_addtional_arguments(PALETTE *p)
 {
-
     /* Handle dark/light or color mode */
+    if (THEME_ARG == NULL &&
+            (LIGHT_ARG == NULL && COLOR_ARG == NULL && DARK_ARG == NULL))
+        DARK_ARG = "";
+
     if (DARK_ARG  != NULL)
         palette_handle_dark_mode(p);
     if (LIGHT_ARG != NULL)
@@ -1514,6 +1523,12 @@ void set_term_colors(PALETTE pal)
 /* cache wallpaper color palette */
 void palette_write_cache(char *filepath, PALETTE *p)
 {
+    if (NO_CACHE_ARG != NULL)
+        return;
+
+    if (filepath == NULL)
+        return;
+
     char *filename = basename(filepath);
 
     size_t cache_file_len = strlen(filename) + strlen(".hellwal") + 1;
@@ -1536,8 +1551,8 @@ void palette_write_cache(char *filepath, PALETTE *p)
     t.path = full_cache_path;
     t.name = cache_file;
 
-    //process_template(&t, *p);
-    //template_write(&t, cache_dir);
+    process_template(&t, *p);
+    template_write(&t, cache_dir);
 
     free(cache_file);
     free(cache_dir);
@@ -1547,6 +1562,12 @@ void palette_write_cache(char *filepath, PALETTE *p)
 /* if wallpaper was previously computed, just load it */
 int check_cached_palette(char *filepath, PALETTE *p)
 {
+    if (NO_CACHE_ARG != NULL)
+        return 0;
+
+    if (filepath == NULL)
+        return 0;
+
     char *filename = basename(filepath);
 
     size_t cache_file_len = strlen(filename) + strlen(".hellwal") + 1;
@@ -1565,19 +1586,21 @@ int check_cached_palette(char *filepath, PALETTE *p)
 
     char *theme = load_file(full_cache_path);
 
-    if (theme == NULL)
+    int result = 1;
+    if (theme == NULL) {
         warn("Failed to open file: %s", full_cache_path);
-    else
-    {
+        result = 0;
+    }
+    else {
         /* cached palette is stored as theme */
-        process_theme(theme, p);
+        result = process_theme(theme, p);
     }
 
     free(cache_file);
     free(cache_dir);
     free(full_cache_path);
 
-    return 1;
+    return result;
 }
 
 /* 
@@ -1685,11 +1708,13 @@ void process_template(TEMPLATE *t, PALETTE pal)
                 /* escape delim */
                 if (skip == 1)
                 {
-                    //TODO
                     template_size += 2;
                     template_buffer = realloc(template_buffer, template_size);
-                    strcat(template_buffer, "%");
-                    template_size += 2;
+                    if (template_buffer == NULL) return;
+
+                    strncat(template_buffer, p->input + p->pos - 1, 1);
+                    buffrd_pos = p->pos;
+
                     skip = 0;
                 }
                 else

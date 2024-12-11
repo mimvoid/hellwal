@@ -1,16 +1,18 @@
-VERSION = 1.0.0
+VERSION = 1.0.1
 
-CFLAGS = -Wall -Wextra -lm -O3
+CFLAGS = -Wall -Wextra -O3
+LDFLAGS = -lm
+
 DESTDIR = /usr/local/bin
 
 hellwal: hellwal.c
-	$(CC) $(CFLAGS) hellwal.c -o hellwal
+	$(CC) $(CFLAGS) $(LDFLAGS) hellwal.c -o hellwal
 
-hellwal-gdb: hellwal.c
-	$(CC) $(CFLAGS) -ggdb hellwal.c -o hellwal-gdb
+debug: hellwal.c
+	$(CC) $(CFLAGS) -ggdb $(LDFLAGS) hellwal.c -o hellwal
 
 clean:
-	rm hellwal hellwal-v*
+	rm hellwal
 
 install: hellwal
 	mkdir -p $(DESTDIR)
@@ -23,4 +25,4 @@ uninstall:
 release: hellwal
 	tar czf hellwal-v$(VERSION).tar.gz hellwal
 
-.PHONY: hellwal release clean install uninstall
+.PHONY: hellwal debug release clean install uninstall
