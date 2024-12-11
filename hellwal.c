@@ -1,4 +1,4 @@
-/*  hellwal - v1.0.0 - MIT LICENSE
+/*  hellwal - v1.0.2 - MIT LICENSE
  *
  *  [ ] TODO: gtk css?
  *  [ ] TODO: support for other OS's like Mac or Win                        
