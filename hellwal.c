@@ -1,9 +1,7 @@
 /*  hellwal - v1.0.0 - MIT LICENSE
  *
  *  [ ] TODO: gtk css?
- *  [ ] TODO: config ( is it really needed? )                               
  *  [ ] TODO: support for other OS's like Mac or Win                        
- *  [ ] TODO: handle exception: unclosed delim
  *  ------------------------------------------------------------------------
  *  [x] TODO: tweaking options for generated colors (func + dark-light mode 
  *  [x] TODO: bright & dark offset value as cmd line argument               
@@ -17,6 +15,12 @@
  *  [x] TODO: templating                                                    
  *  [x] TODO: parsing                                                       
  *
+ * changelog v1.0.2:
+ *  - changed ~~arc4random()~~ to rand(), because it's not available on all platforms
+ *  - changed rand() to ~~arc4random()~~
+ *  - created palettes caching
+ *  - added '--no-cache' cmd line argument
+ *  - fixed applying addtional arguments for themes
  *
  * changelog v1.0.1:
  *  - fixed loading incorrect number of channels from image, this casued unmatched palette
@@ -82,6 +86,7 @@
 #include <glob.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <libgen.h>
 #include <dirent.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -224,6 +229,9 @@ char *DEBUG_ARG = NULL;
 /* run script after successfull hellwal job */
 char *SCRIPT_ARG = NULL;
 
+/* do not cache palette, do not read cached palettes */
+char *NO_CACHE_ARG = NULL;
+
 /* invert color palette colors */
 char *INVERT_ARG = NULL;
 
@@ -240,6 +248,32 @@ float GRAY_SCALE_ARG = -1;
 float BRIGHTNESS_OFFSET_ARG = -1;
 float DARKNESS_OFFSET_ARG = -1;
 float OFFSET_GLOBAL = 0;
+
+/* default color template to save cached themes */
+char *CACHE_TEMPLATE = "\
+\\%\\%wallpaper = %% wallpaper %% \\%\\%\n\
+\
+\\%\\%background = #%% background %% \\%\\%\n\
+\\%\\%foreground = #%% foreground %% \\%\\%\n\
+\\%\\%cursor = #%% cursor %% \\%\\%\n\
+\\%\\%border = #%% border %% \\%\\%\n\
+\
+\\%\\%color0 = #%% color0.hex %% \\%\\%\n\
+\\%\\%color1 = #%% color1.hex %% \\%\\%\n\
+\\%\\%color2 = #%% color2.hex %% \\%\\%\n\
+\\%\\%color3 = #%% color3.hex %% \\%\\%\n\
+\\%\\%color4 = #%% color4.hex %% \\%\\%\n\
+\\%\\%color5 = #%% color5.hex %% \\%\\%\n\
+\\%\\%color6 = #%% color6.hex %% \\%\\%\n\
+\\%\\%color7 = #%% color7.hex %% \\%\\%\n\
+\\%\\%color8 = #%% color8.hex %% \\%\\%\n\
+\\%\\%color9 = #%% color9.hex %% \\%\\%\n\
+\\%\\%color10 = #%% color10.hex %% \\%\\%\n\
+\\%\\%color11 = #%% color11.hex %% \\%\\%\n\
+\\%\\%color12 = #%% color12.hex %% \\%\\%\n\
+\\%\\%color13 = #%% color13.hex %% \\%\\%\n\
+\\%\\%color14 = #%% color14.hex %% \\%\\%\n\
+\\%\\%color15 = #%% color15.hex %% \\%\\%\n";
 
 /*** 
  * FUNCTIONS DECLARATIONS
@@ -305,8 +339,10 @@ void set_term_colors(PALETTE pal);
 /* palettes */
 PALETTE gen_palette(IMG *img);
 PALETTE get_color_palette(PALETTE p);
-void apply_addtional_arguments(PALETTE *p);
 char *palette_color(PALETTE pal, unsigned c, char *fmt);
+
+int check_cached_palette(char *filepath, PALETTE *p);
+void palette_write_cache(char *filepath, PALETTE *p);
 
 void invert_palette(PALETTE *p);
 void print_palette(PALETTE pal);
@@ -314,6 +350,7 @@ void reverse_palette(PALETTE *palette);
 void palette_handle_dark_mode(PALETTE *p);
 void palette_handle_light_mode(PALETTE *p);
 void palette_handle_color_mode(PALETTE *p);
+void apply_addtional_arguments(PALETTE *p);
 void sort_palette_by_luminance(PALETTE *palette);
 
 /* templates */
@@ -412,6 +449,10 @@ int set_args(int argc, char *argv[])
         else if (strcmp(argv[i], "--debug") == 0)
         {
             DEBUG_ARG = "";
+        }
+        else if (strcmp(argv[i], "--no-cache") == 0)
+        {
+            NO_CACHE_ARG = "";
         }
         else if ((strcmp(argv[i], "--template-folder") == 0 || strcmp(argv[i], "-f") == 0))
         {
@@ -557,10 +598,6 @@ int set_args(int argc, char *argv[])
         else
             THEME_ARG = rand_file(THEME_FOLDER_ARG);
     }
-
-    /* if mode is not set, set DARK as default */
-    if (LIGHT_ARG == NULL && COLOR_ARG == NULL && DARK_ARG == NULL)
-        DARK_ARG = "";
 
     /* set offset values - you can provide both, but they will interfier with each other */
     if (DARKNESS_OFFSET_ARG != -1)
@@ -739,7 +776,7 @@ char *rand_file(char *path)
         err("No files found in directory: %s\n", path);
     }
 
-    srand(time(NULL));
+    srand((unsigned int)(time(NULL) ^ getpid()));
     size_t r_idx = rand() % count;
     char *choosen = calloc(1, strlen(path) + strlen(files[r_idx] + 2));
     sprintf(choosen, "%s/%s", path, strdup(files[r_idx]));
@@ -1110,11 +1147,17 @@ void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, si
 PALETTE get_color_palette(PALETTE p)
 {
     if (THEME_ARG)
+    {
         p = process_themeing(THEME_ARG); /* if true, program end's here */
-    else {
-        IMG *img = img_load(IMAGE_ARG);
-        p = gen_palette(img);
-        img_free(img);
+    }
+    else
+    {
+        if (!check_cached_palette(IMAGE_ARG, &p)) {
+            IMG *img = img_load(IMAGE_ARG);
+            p = gen_palette(img);
+            palette_write_cache(IMAGE_ARG, &p);
+            img_free(img);
+        }
     }
 
     return p;
@@ -1122,8 +1165,11 @@ PALETTE get_color_palette(PALETTE p)
 
 void apply_addtional_arguments(PALETTE *p)
 {
-
     /* Handle dark/light or color mode */
+    if (THEME_ARG == NULL &&
+            (LIGHT_ARG == NULL && COLOR_ARG == NULL && DARK_ARG == NULL))
+        DARK_ARG = "";
+
     if (DARK_ARG  != NULL)
         palette_handle_dark_mode(p);
     if (LIGHT_ARG != NULL)
@@ -1474,6 +1520,89 @@ void set_term_colors(PALETTE pal)
     log_c("Set colors to [%d] terminals!", succ+1);
 }
 
+/* cache wallpaper color palette */
+void palette_write_cache(char *filepath, PALETTE *p)
+{
+    if (NO_CACHE_ARG != NULL)
+        return;
+
+    if (filepath == NULL)
+        return;
+
+    char *filename = basename(filepath);
+
+    size_t cache_file_len = strlen(filename) + strlen(".hellwal") + 1;
+    char *cache_file = (char*)malloc(cache_file_len);
+    snprintf(cache_file, cache_file_len, "%s.hellwal", filename);
+
+    size_t cache_dir_len = strlen(OUTPUT_ARG) + strlen("/cache/") + 1;
+    char *cache_dir = (char*)malloc(cache_dir_len);
+    snprintf(cache_dir, cache_dir_len, "%s/cache/", OUTPUT_ARG);
+
+    char *full_cache_path = (char*)malloc(strlen(cache_dir) + strlen(cache_file) + 1);
+    snprintf(full_cache_path, strlen(cache_dir) + strlen(cache_file) + 1, "%s%s", cache_dir, cache_file);
+
+    /* create dir if not exits */
+    check_output_dir(cache_dir);
+
+    /* create and process template */
+    TEMPLATE t;
+    t.content = CACHE_TEMPLATE;
+    t.path = full_cache_path;
+    t.name = cache_file;
+
+    process_template(&t, *p);
+    template_write(&t, cache_dir);
+
+    free(cache_file);
+    free(cache_dir);
+    free(full_cache_path);
+}
+
+/* if wallpaper was previously computed, just load it */
+int check_cached_palette(char *filepath, PALETTE *p)
+{
+    if (NO_CACHE_ARG != NULL)
+        return 0;
+
+    if (filepath == NULL)
+        return 0;
+
+    char *filename = basename(filepath);
+
+    size_t cache_file_len = strlen(filename) + strlen(".hellwal") + 1;
+    char *cache_file = (char*)malloc(cache_file_len);
+    snprintf(cache_file, cache_file_len, "%s.hellwal", filename);
+
+    size_t cache_dir_len = strlen(OUTPUT_ARG) + strlen("/cache/") + 1;
+    char *cache_dir = (char*)malloc(cache_dir_len);
+    snprintf(cache_dir, cache_dir_len, "%s/cache/", OUTPUT_ARG);
+
+    char *full_cache_path = (char*)malloc(strlen(cache_dir) + strlen(cache_file) + 1);
+    snprintf(full_cache_path, strlen(cache_dir) + strlen(cache_file) + 1, "%s%s", cache_dir, cache_file);
+
+    /* create dir if not exits */
+    check_output_dir(cache_dir);
+
+    char *theme = load_file(full_cache_path);
+
+    int result = 1;
+    if (theme == NULL) {
+        warn("Failed to open file: %s", full_cache_path);
+        result = 0;
+    }
+    else {
+        /* cached palette is stored as theme */
+        result = process_theme(theme, p);
+    }
+
+    free(cache_file);
+    free(cache_dir);
+    free(full_cache_path);
+
+    return result;
+}
+
 /* 
  * Loads content from file file to buffer,
  * returns buffer if succeded, otherwise NULL
@@ -1481,10 +1610,8 @@ void set_term_colors(PALETTE pal)
 char *load_file(char *filename)
 {
     FILE *file = fopen(filename, "r");
-    if (file == NULL) {
-        warn("Failed to open file: %s", filename);
+    if (file == NULL)
         return NULL;
-    }
 
     fseek(file, 0, SEEK_END);
     int size = ftell(file);
@@ -1530,7 +1657,8 @@ void process_templating(PALETTE pal)
     if (templates == NULL) return;
 
     check_output_dir(OUTPUT_ARG);
-    for (size_t i = 0; i < templates_count; i++) {
+    for (size_t i = 0; i < templates_count; i++)
+    {
         process_template(templates[i], pal);
         t_success += template_write(templates[i], OUTPUT_ARG);
     }
@@ -1553,13 +1681,30 @@ void process_template(TEMPLATE *t, PALETTE pal)
     size_t template_size = 0;
     int last_pos = 0;
     int buffrd_pos = 0;
-    
-    hell_parser_t *p = hell_parser_create(load_file(t->path));
-    if (p == NULL) {
+
+    char *file_content = NULL;
+    if (t->content == NULL)
+    {
+        file_content = load_file(t->path);
+        if (file_content == NULL)
+        {
+            warn("Failed to open file: %s", t->path);
+            return;
+        }
+    }
+    else
+    {
+        file_content = t->content;
+    }
+
+    hell_parser_t *p = hell_parser_create(file_content);
+    if (p == NULL)
+    {
         t->content = NULL;
         return;
     }
 
+    int skip = 0;
     while (!hell_parser_eof(p))
     {
         char ch;
@@ -1567,120 +1712,139 @@ void process_template(TEMPLATE *t, PALETTE pal)
         {
             if (ch == HELLWAL_DELIM)
             {
-                p->pos -= 1;  
-                int idx = 0;
-                size_t len = 0;
-                char *var_arg = NULL;
-                char *delim_buf = NULL;
-
-                last_pos = p->pos + 1;
-
-                int size_before_delim = last_pos - buffrd_pos - 1;
-                if (size_before_delim > 0)
+                /* escape delim */
+                if (skip == 1)
                 {
-                    template_size += size_before_delim + 1;
+                    template_size += 2;
                     template_buffer = realloc(template_buffer, template_size);
-                    strncat(template_buffer, p->input + buffrd_pos, size_before_delim);
-                }
+                    if (template_buffer == NULL) return;
 
-                if (hell_parser_delim_buffer_between(p, HELLWAL_DELIM, HELLWAL_DELIM_COUNT, &delim_buf) == HELL_PARSER_OK)
-                {
-                    hell_parser_t *pd = hell_parser_create(delim_buf);
-                    if (pd == NULL)
-                        err("Failed to allocate parser");
-                        
-                    if (hell_parser_delim(pd, '.', 1) == HELL_PARSER_OK)
-                    {
-                        size_t l_size = pd->pos - 1;
-                        size_t r_size = pd->length - pd->pos;
-
-                        char *left  = calloc(1, l_size);
-                        char *right = calloc(1, r_size);
-
-                        strncpy(left, pd->input, l_size);
-                        strncpy(right, pd->input + pd->pos, r_size);
-
-                        remove_whitespaces(left);
-                        remove_whitespaces(right);
-
-                        idx = is_color_palette_var(left);
-                        if (idx != -1 && pd->pos + 1 < pd->length)
-                        {
-                            /* 
-                             * check if after '.' is rgb, if yes get output as rgb,
-                             * if not output will always be hex
-                             */
-                            if (!strcmp(right, "rgb"))
-                                var_arg = palette_color(pal, idx, "%d, %d, %d");
-                            else
-                                var_arg = palette_color(pal, idx, "%02x%02x%02x");
-                        }
-                        else if (!strcmp(left, "foreground") || !strcmp(left, "cursor") || !strcmp(left, "border"))
-                        {
-                            if (!strcmp(right, "rgb"))
-                                var_arg = palette_color(pal, 15, "%d, %d, %d");
-                            else
-                                var_arg = palette_color(pal, 15, "%02x%02x%02x");
-                        }
-                        else if (!strcmp(left, "background"))
-                        {
-                            if (!strcmp(right, "rgb"))
-                                var_arg = palette_color(pal, 0, "%d, %d, %d");
-                            else
-                                var_arg = palette_color(pal, 0, "%02x%02x%02x");
-                        }
-
-                        free(left);
-                        free(right);
-                    }
-                    /* check if an argument stands for wallpaper path */
-                    else if (!strcmp(delim_buf, "wallpaper"))
-                    {
-                        if (IMAGE_ARG != NULL)
-                        {
-                            len = strlen(IMAGE_ARG);
-                            var_arg = IMAGE_ARG;
-                        }
-                        else if (THEME_ARG)
-                            var_arg = THEME_ARG;
-                        else
-                            var_arg = "";
-                    }
-                    /* check other keywords */
-                    else if (!strcmp(delim_buf, "foreground") || !strcmp(delim_buf, "cursor") || !strcmp(delim_buf, "border"))
-                        var_arg = palette_color(pal, 15, "%02x%02x%02x");
-                    else if (!strcmp(delim_buf, "background"))
-                        var_arg = palette_color(pal, 0, "%02x%02x%02x");
-                    else
-                    {
-                        /* '.' was not found, try to find color, put hex by default on it */
-                        idx = is_color_palette_var(delim_buf);
-
-                        if (idx != -1)
-                                var_arg = palette_color(pal, idx, "%02x%02x%02x");
-                    }
-
-                    if (var_arg != NULL) {
-                        len = strlen(var_arg);
-                        template_size += len + 1;
-
-                        char *temp_buffer = realloc(template_buffer, template_size);
-                        if (temp_buffer == NULL) {
-                            free(template_buffer);
-                            return;
-                        }
-                        template_buffer = temp_buffer;
-
-                        strcat(template_buffer, var_arg);
-                    }
-                     
-                    /* Update last read buffer position */
+                    strncat(template_buffer, p->input + p->pos - 1, 1);
                     buffrd_pos = p->pos;
 
-                    free(delim_buf);
-                    hell_parser_destroy(pd);
+                    skip = 0;
+                }
+                else
+                {
+                    p->pos -= 1;
+                    int idx = 0;
+                    size_t len = 0;
+                    char *var_arg = NULL;
+                    char *delim_buf = NULL;
+
+                    last_pos = p->pos + 1;
+
+                    int size_before_delim = last_pos - buffrd_pos - 1;
+                    if (size_before_delim > 0)
+                    {
+                        template_size += size_before_delim + 1;
+                        template_buffer = realloc(template_buffer, template_size);
+                        strncat(template_buffer, p->input + buffrd_pos, size_before_delim);
+                    }
+
+                    if (hell_parser_delim_buffer_between(p, HELLWAL_DELIM, HELLWAL_DELIM_COUNT, &delim_buf) == HELL_PARSER_OK)
+                    {
+                        hell_parser_t *pd = hell_parser_create(delim_buf);
+                        if (pd == NULL)
+                            err("Failed to allocate parser");
+
+                        remove_whitespaces(delim_buf);
+
+                        if (hell_parser_delim(pd, '.', 1) == HELL_PARSER_OK)
+                        {
+                            size_t l_size = pd->pos - 1;
+                            size_t r_size = pd->length - pd->pos;
+
+                            char *left  = calloc(1, l_size);
+                            char *right = calloc(1, r_size);
+
+                            strncpy(left, pd->input, l_size);
+                            strncpy(right, pd->input + pd->pos, r_size);
+
+                            remove_whitespaces(left);
+                            remove_whitespaces(right);
+
+                            idx = is_color_palette_var(left);
+                            if (idx != -1 && pd->pos + 1 < pd->length)
+                            {
+                                /* 
+                                 * check if after '.' is rgb, if yes get output as rgb,
+                                 * if not output will always be hex
+                                 */
+                                if (!strcmp(right, "rgb"))
+                                    var_arg = palette_color(pal, idx, "%d, %d, %d");
+                                else
+                                    var_arg = palette_color(pal, idx, "%02x%02x%02x");
+                            }
+                            else if (!strcmp(left, "foreground") || !strcmp(left, "cursor") || !strcmp(left, "border"))
+                            {
+                                if (!strcmp(right, "rgb"))
+                                    var_arg = palette_color(pal, 15, "%d, %d, %d");
+                                else
+                                    var_arg = palette_color(pal, 15, "%02x%02x%02x");
+                            }
+                            else if (!strcmp(left, "background"))
+                            {
+                                if (!strcmp(right, "rgb"))
+                                    var_arg = palette_color(pal, 0, "%d, %d, %d");
+                                else
+                                    var_arg = palette_color(pal, 0, "%02x%02x%02x");
+                            }
+
+                            free(left);
+                            free(right);
+                        }
+                        /* check if an argument stands for wallpaper path */
+                        else if (!strcmp(delim_buf, "wallpaper"))
+                        {
+                            if (IMAGE_ARG != NULL)
+                            {
+                                len = strlen(IMAGE_ARG);
+                                var_arg = IMAGE_ARG;
+                            }
+                            else if (THEME_ARG)
+                                var_arg = THEME_ARG;
+                            else
+                                var_arg = "";
+                        }
+                        /* check other keywords */
+                        else if (!strcmp(delim_buf, "foreground") || !strcmp(delim_buf, "cursor") || !strcmp(delim_buf, "border"))
+                            var_arg = palette_color(pal, 15, "%02x%02x%02x");
+                        else if (!strcmp(delim_buf, "background"))
+                            var_arg = palette_color(pal, 0, "%02x%02x%02x");
+                        else
+                        {
+                            /* '.' was not found, try to find color, put hex by default on it */
+                            idx = is_color_palette_var(delim_buf);
+
+                            if (idx != -1)
+                                var_arg = palette_color(pal, idx, "%02x%02x%02x");
+                        }
+
+                        if (var_arg != NULL) {
+                            len = strlen(var_arg);
+                            template_size += len + 1;
+                            template_buffer = realloc(template_buffer, template_size);
+                            if (template_buffer == NULL) return;
+                            strcat(template_buffer, var_arg);
+                        }
+
+                        /* Update last read buffer position */
+                        buffrd_pos = p->pos;
+
+                        skip = 0;
+                        free(delim_buf);
+                        hell_parser_destroy(pd);
+                    }
                 }
             }
+            /* this is for escaping template delim */
+            else if (ch == '\\')
+            {
+                skip = 1;
+            }
+            else
+                skip = 0;
         }
     }
 
@@ -1714,14 +1878,17 @@ TEMPLATE **get_template_structure_dir(const char *dir_path, size_t *_size)
     size_t size = 0;
 
     DIR *dir = opendir(dir_path);
-    if (dir == NULL) {
+    if (dir == NULL)
+    {
         warn("Cannot access directory: %s", dir_path);
         return NULL;
     }
 
     struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_REG) {
+    while ((entry = readdir(dir)) != NULL)
+    {
+        if (entry->d_type == DT_REG)
+        {
             size_t path_len = strlen(dir_path) + strlen(entry->d_name) + 2; // +2 for '/' and '\0'
             char *full_path = malloc(path_len);
             if (full_path == NULL)
@@ -1831,6 +1998,7 @@ char *load_theme(char *themename)
     if (t != NULL)
         return t;
 
+    warn("Failed to open file: %s", themename);
     return NULL;
 }
 
@@ -1872,11 +2040,15 @@ int is_color_palette_var(char *name)
     return -1;
 }
 
+/* process theme, return color palette - return 0 on error */
 int process_theme(char *t, PALETTE *pal)
 {
-    int processed_colors = 0;
+    if (t == NULL)
+        return 0;
 
+    int processed_colors = 0;
     hell_parser_t *p = hell_parser_create(t);
+
     if (p == NULL) 
         err("Failed to create parser");
 
