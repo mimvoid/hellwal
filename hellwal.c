@@ -16,7 +16,8 @@
  *  [x] TODO: parsing                                                       
  *
  * changelog v1.0.2:
- *  - changed rand() to arc4random()
+ *  - changed ~~arc4random()~~ to rand(), because it's not available on all platforms
+ *  - changed rand() to ~~arc4random()~~
  *  - created palettes caching
  *  - added '--no-cache' cmd line argument
  *  - fixed applying addtional arguments for themes
@@ -776,7 +777,8 @@ char *rand_file(char *path)
         err("No files found in directory: %s\n", path);
     }
 
-    size_t r_idx = arc4random() % count;
+    srand((unsigned int)(time(NULL) ^ getpid()));
+    size_t r_idx = rand() % count;
     char *choosen = calloc(1, strlen(path) + strlen(files[r_idx] + 2));
     sprintf(choosen, "%s/%s", path, strdup(files[r_idx]));
 
