@@ -778,7 +778,7 @@ char *rand_file(char *path)
 
     srand((unsigned int)(time(NULL) ^ getpid()));
     size_t r_idx = rand() % count;
-    char *choosen = calloc(1, strlen(path) + strlen(files[r_idx] + 2));
+    char *choosen = calloc(1, strlen(path) + strlen(files[r_idx]) + 2);
     sprintf(choosen, "%s/%s", path, strdup(files[r_idx]));
 
     for (size_t i = 0; i < count; i++)
