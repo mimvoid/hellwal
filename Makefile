@@ -6,10 +6,10 @@ LDFLAGS = -lm
 DESTDIR = /usr/local/bin
 
 hellwal: hellwal.c
-	$(CC) $(CFLAGS) $(LDFLAGS) hellwal.c -o hellwal
+	$(CC) $(CFLAGS) hellwal.c -o hellwal $(LDFLAGS)
 
 debug: hellwal.c
-	$(CC) $(CFLAGS) -ggdb $(LDFLAGS) hellwal.c -o hellwal
+	$(CC) $(CFLAGS) -ggdb hellwal.c -o hellwal $(LDFLAGS)
 
 clean:
 	rm hellwal
