@@ -2106,8 +2106,6 @@ int process_theme(char *t, PALETTE *pal)
 
     if (processed_colors == PALETTE_SIZE)
         return 1;
-    if (processed_colors > 0)
-        free(pal);
 
     return 0;
 }
