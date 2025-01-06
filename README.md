@@ -7,10 +7,18 @@
 
 ## Installation
 
-To install from **AUR**, run:
+1. To install from **AUR**, run:
 
 ```sh
 yay -S hellwal
+```
+
+2. You can also install hellwal from nixpkgs unstable:
+
+```nix
+environment.systemPackages = [
+  pkgs.hellwal
+];
 ```
 
 ## Building
@@ -18,7 +26,7 @@ yay -S hellwal
 Clone git repo, run make command and you are ready to go! - you just need C compiler and gnumake!
 
 ```sh
-git clone https://github.com/danihek/hellwal && cd hellwal  && make
+git clone https://github.com/danihek/hellwal && cd hellwal && make
 ```
 
 ## How to use?

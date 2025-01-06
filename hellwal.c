@@ -15,6 +15,11 @@
  *  [x] TODO: templating                                                    
  *  [x] TODO: parsing                                                       
  *
+ * changelog v1.0.3:
+ *  - changed: README typo
+ *  - changed: Makefile - Fixed the order of compiler flags
+ *  - changed: hellwal.c - Removed problematic free(pal) line
+ *
  * changelog v1.0.2:
  *  - changed ~~arc4random()~~ to rand(), because it's not available on all platforms
  *  - changed rand() to ~~arc4random()~~
