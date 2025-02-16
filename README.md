@@ -145,6 +145,13 @@ source ~/.cache/hellwal/variables.sh
 sh ~/.cache/hellwal/terminal.sh
 ```
 
+### Alternatively if you use fish add these to fish config:
+
+```sh
+source ~/.cache/hellwal/variablesfish.fish
+fish ~/.cache/hellwal/terminal.sh
+```
+
 ### TODO
 
 - [ ] TODO: gtk css?
