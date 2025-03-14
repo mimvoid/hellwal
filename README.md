@@ -171,7 +171,7 @@ hellwal -i [wallpaper] --color --light --dark
 
 Also you have couple of cool arguments to manipulate how colors will be computed:
 
-- you can create all palette more dark by specifying ``--dark-offset`` from 0-1:
+- you can make all colors in palette darker by specifying ``--dark-offset`` from 0-1:
 
 ```sh
 hellwal -i [wallpaper] --light --dark-offset 0.5
@@ -183,7 +183,7 @@ hellwal -i [wallpaper] --light --dark-offset 0.5
 hellwal -i [wallpaper] --bright-offset 0.5
 ```
 
-- invert whole template ``--invert``:
+- invert colors  ``--invert``:
 
 ```sh
 hellwal -i [wallpaper] --light --invert
