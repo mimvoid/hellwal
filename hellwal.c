@@ -16,6 +16,10 @@
  *  [x] TODO: parsing                                                       
  *
  * changelog v1.0.3:
+ *  - fixed --help, I forgot to add some --cmdline args
+ *  - new NEON MODE
+ *  - added hellwm template
+ *  - added fish template
  *  - changed: README typo
  *  - changed: Makefile - Fixed the order of compiler flags
  *  - changed: hellwal.c - Removed problematic free(pal) line
@@ -240,6 +244,9 @@ char *NO_CACHE_ARG = NULL;
 /* invert color palette colors */
 char *INVERT_ARG = NULL;
 
+/* neon-like color palette colors */
+char *NEON_MODE_ARG = NULL;
+
 /* Set Static Background colors */
 RGB *STATIC_BG_ARG = NULL;
 
@@ -291,6 +298,7 @@ int set_args(int argc, char *argv[]);
 RGB clamp_rgb(RGB color);
 uint8_t clamp_uint8(int value);
 int is_between_01_float(const char *str);
+float clamp_float(float value, float min, float max);
 
 char *rand_file(char *path);
 char *home_full_path(const char* path);
@@ -312,6 +320,7 @@ void img_free(IMG *img);
 
 /* RGB */
 void print_rgb(RGB col);
+RGB hsl_to_rgb(HSL hsl);
 HSL rgb_to_hsl(RGB color);
 void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes);
 
@@ -385,18 +394,21 @@ void hellwal_usage(const char *name)
     printf("  -l, --light                        Set light mode\n");
     printf("  -c, --color                        Enable colorized mode (experimental)\n");
     printf("  -v, --invert                       Invert colors in the palette\n");
-    printf("  -q, --quiet                        Suppress output\n");
+    printf("  -m, --neon-mode                    Enhance colors for a neon effect\n");
     printf("  -r, --random                       Pick random image or theme\n");
+    printf("  -q, --quiet                        Suppress output\n");
     printf("  -s, --script             <script>  Execute script after running hellwal\n");
     printf("  -f, --template-folder    <dir>     Set folder containing templates\n");
     printf("  -o, --output             <dir>     Set output folder for generated templates\n");
     printf("  -t, --theme              <file>    Set theme file or name\n");
-    printf("  -k, --theme-folder       <value>   Set folder containing themes\n");
+    printf("  -k, --theme-folder       <dir>     Set folder containing themes\n");
     printf("  -g, --gray-scale         <value>   Apply grayscale filter   (0-1) (float)\n");
     printf("  -n, --dark-offset        <value>   Adjust darkness offset   (0-1) (float)\n");
     printf("  -b, --bright-offset      <value>   Adjust brightness offset (0-1) (float)\n");
-    printf("  --, --static-background \"#hex\"     Set static background\n");
-    printf("  --, --static-foreground \"#hex\"     Set static foreground\n");
+    printf("  --debug                            Enable debug mode\n");
+    printf("  --no-cache                         Disable caching\n");
+    printf("  --static-background \"#hex\"         Set static background color\n");
+    printf("  --static-foreground \"#hex\"         Set static foreground color\n");
     printf("  -h, --help                         Display this help and exit\n\n");
     printf("Defaults:\n");
     printf("  Template folder: ~/.config/hellwal/templates\n");
@@ -442,6 +454,10 @@ int set_args(int argc, char *argv[])
         else if ((strcmp(argv[i], "--invert") == 0 || strcmp(argv[i], "-v") == 0))
         {
             INVERT_ARG = "";
+        }
+        else if ((strcmp(argv[i], "--neon-mode") == 0 || strcmp(argv[i], "-m") == 0))
+        {
+            NEON_MODE_ARG = "";
         }
         else if ((strcmp(argv[i], "--random") == 0 || strcmp(argv[i], "-r") == 0))
         {
@@ -731,6 +747,13 @@ void run_script(const char *script)
         err("Script \"%s\" exited with code: %d", script, exit_code);
 }
 
+
+/* avoid exceeding max value for float */
+float clamp_float(float value, float min, float max)
+{
+    return value < min ? min : (value > max ? max : value);
+}
+
 /* avoid exceeding max value */
 uint8_t clamp_uint8(int value)
 {
@@ -919,6 +942,37 @@ HSL rgb_to_hsl(RGB color)
     }
 
     return hsl;
+}
+
+/* chatgpt generated it xd */
+RGB hsl_to_rgb(HSL hsl)
+{
+    float C = (1 - fabsf(2 * hsl.L - 1)) * hsl.S;
+    float X = C * (1 - fabsf(fmodf(hsl.H / 60.0f, 2) - 1));
+    float m = hsl.L - C / 2;
+
+    float r = 0, g = 0, b = 0;
+
+    if (hsl.H >= 0 && hsl.H < 60) {
+        r = C, g = X, b = 0;
+    } else if (hsl.H >= 60 && hsl.H < 120) {
+        r = X, g = C, b = 0;
+    } else if (hsl.H >= 120 && hsl.H < 180) {
+        r = 0, g = C, b = X;
+    } else if (hsl.H >= 180 && hsl.H < 240) {
+        r = 0, g = X, b = C;
+    } else if (hsl.H >= 240 && hsl.H < 300) {
+        r = X, g = 0, b = C;
+    } else if (hsl.H >= 300 && hsl.H < 360) {
+        r = C, g = 0, b = X;
+    }
+
+    RGB rgb;
+    rgb.R = (uint8_t)((r + m) * 255);
+    rgb.G = (uint8_t)((g + m) * 255);
+    rgb.B = (uint8_t)((b + m) * 255);
+
+    return rgb;
 }
 
 /* function to reverse the palette, used when light mode is specified */
@@ -1357,10 +1411,44 @@ PALETTE gen_palette(IMG *img)
         palette.colors[num_colors++] = new_color;
     }
 
+    if (DEBUG_ARG != NULL)
+        log_c("\n---\n");
+
+    if (NEON_MODE_ARG != NULL)
+    {
+        if (DEBUG_ARG != NULL)
+            log_c("Applying NEON MODE:\n\n");
+
+        for (int i = 0; i < PALETTE_SIZE/2; i++)
+        {
+            if (i > 0)
+            {
+                HSL hsl = rgb_to_hsl(palette.colors[i]);
+
+                if (hsl.L <= 0.1f || hsl.L >= 0.9f)
+                    continue;
+
+                hsl.S = clamp_float(hsl.S * 1.25f, 0.6f, 1.0f);
+                hsl.L = clamp_float(hsl.L * 1.15f, 0.3f, 0.9f);
+
+                palette.colors[i] = hsl_to_rgb(hsl);
+            }
+
+            if (DEBUG_ARG != NULL)
+            {
+                print_rgb(palette.colors[i]);
+                printf(" | (%d, %d, %d)\n", palette.colors[i].R, palette.colors[i].G, palette.colors[i].B);
+            }
+        }
+        if (DEBUG_ARG != NULL)
+            log_c("\n");
+    }
     sort_palette_by_luminance(&palette);
 
     for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
+    {
         palette.colors[i] = lighten_color(palette.colors[i - PALETTE_SIZE / 2], 0.25f);
+    }
 
     return palette;
 }
