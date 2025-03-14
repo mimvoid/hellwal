@@ -203,8 +203,9 @@ With ``--script`` or ``-s`` you can run script(or any shell command) after hellw
 ### On a side note:
 
 If you want your new terminals to open with previusly generated or specified color palette, add this templates to your ``~/.config/hellwal/templates/`` folder:
-    - variables.sh
-    - terminal.sh
+
+- variables.sh
+- terminal.sh
 
 then in ``.bash.rc`` add following lines:
 
