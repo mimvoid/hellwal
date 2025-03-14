@@ -88,7 +88,11 @@ By writing '.' after keyword you can specify type: hex or rgb. If you havent spe
 
 ## JSON
 
-You can us ``--json``argument to suppress any other output and write colors to ``stdout`` in json format. It's easy to do something with it with ``jq`` later
+You can use ``--json``argument to suppress any other output and write colors to ``stdout`` in json format. It's easy to do something with it with ``jq`` later. For example:
+
+```sh
+hellwal -i [wallpaper] --json | jq '.'
+```
 
 ## Themes
 
@@ -127,11 +131,71 @@ I recommend to put all themes to ``~/.config/hellwal/themes folder``, because fr
 hellwal -t gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/themes
 ```
 
-### Modes
+## NEON Mode
 
-You can select ``-d`` and ``--dark`` or ``-l`` and ``--light`` mode on every given image, theme etc, no matter if it's generated from image or from theme file.lashbacks.
+Neon mode boosts colors to make them look more neon-like, sometimes it's pain in the EYE, but usually it looks better. Turned **off** by default.
 
-### Scripts
+```sh
+hellwal -i [wallpaper] --neon-mode
+```
+
+## Modes
+
+You can select ``-d`` and ``--dark`` or ``-l`` and ``--light`` mode on every given image, theme etc, no matter if it's generated from image or from theme file. Also there is ``--color`` mode.
+
+### Dark mode (on by default)
+
+```sh
+hellwal -i [wallpaper] --dark
+```
+
+### Light mode
+
+```sh
+hellwal -i [wallpaper] --light
+```
+
+### color mode (crazyy one)
+
+```sh
+hellwal -i [wallpaper] --color
+```
+
+The best thing about it is that you are able to combine all of them together. Usually it's not a good idea, but sometimes you can achieve some crazy combination of colors!
+
+```sh
+hellwal -i [wallpaper] --color --light --dark
+```
+
+---
+
+Also you have couple of cool arguments to manipulate how colors will be computed:
+
+- you can create all palette more dark by specifying ``--dark-offset`` from 0-1:
+
+```sh
+hellwal -i [wallpaper] --light --dark-offset 0.5
+```
+
+- same with ``--bright-offset``:
+
+```sh
+hellwal -i [wallpaper] --bright-offset 0.5
+```
+
+- invert whole template ``--invert``:
+
+```sh
+hellwal -i [wallpaper] --light --invert
+```
+
+- specify gray scale, if you want monochromatic colors ``--gray-scale``:
+
+```sh
+hellwal -i [wallpaper] --color --gray-scale 0.8
+```
+
+## Scripts
 
 With ``--script`` or ``-s`` you can run script(or any shell command) after hellwal.
 **Note**: it will only run if hellwal will not encounter any errors.
