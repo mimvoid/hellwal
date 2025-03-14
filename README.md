@@ -86,6 +86,10 @@ By writing '.' after keyword you can specify type: hex or rgb. If you havent spe
 | hex  | color0.hex | 000000  |
 | rgb  | color0.rgb | 0, 0, 0 |
 
+## JSON
+
+You can us ``--json``argument to suppress any other output and write colors to ``stdout`` in json format. It's easy to do something with it with ``jq`` later
+
 ## Themes
 
 You can set your own theme, re-run it anytime and apply to your config or other programs!
@@ -154,11 +158,8 @@ fish ~/.cache/hellwal/terminal.sh
 
 ### TODO
 
-- [ ] TODO: gtk css?
-- [ ] TODO: config ( is it really needed? )                               
 - [ ] TODO: support for other OS's like Mac or Win                        
-- [ ] TODO: handle exception or warn: unclosed delim
---------------------------------------------------------------------------
+- ------------------------------------------------------------------------
 - [x] TODO: tweaking options for generated colors (func + dark-light mode 
 - [x] TODO: bright & dark offset value as cmd line argument               
 - [x] TODO: support for already built themes (like gruvbox etc.)          

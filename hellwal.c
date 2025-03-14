@@ -1,6 +1,5 @@
 /*  hellwal - v1.0.2 - MIT LICENSE
  *
- *  [ ] TODO: gtk css?
  *  [ ] TODO: support for other OS's like Mac or Win                        
  *  ------------------------------------------------------------------------
  *  [x] TODO: tweaking options for generated colors (func + dark-light mode 
@@ -16,6 +15,7 @@
  *  [x] TODO: parsing                                                       
  *
  * changelog v1.0.3:
+ *  - added --json (-j) mode - it prints colors in stdout in json format, REAMDE
  *  - fixed --help, I forgot to add some --cmdline args
  *  - new NEON MODE
  *  - added hellwm template
@@ -219,6 +219,12 @@ char *TEMPLATE_FOLDER_ARG = NULL;
  */
 char *OUTPUT_ARG = NULL;
 
+/* ouputs json formatted colors to stdout,
+ * without using templates.
+ * https://www.reddit.com/r/unixporn/comments/1h9aawb/comment/m12o2og/
+ */
+char *JSON_ARG = NULL;
+
 /* name of theme in THEME_FOLDER_ARG,
  * or (in case was not found) path to file */
 char *THEME_ARG = NULL;
@@ -286,6 +292,37 @@ char *CACHE_TEMPLATE = "\
 \\%\\%color13 = #%% color13.hex %% \\%\\%\n\
 \\%\\%color14 = #%% color14.hex %% \\%\\%\n\
 \\%\\%color15 = #%% color15.hex %% \\%\\%\n";
+
+/* default color template to save cached themes */
+char *JSON_TEMPLATE = 
+"{\n"
+"  \"wallpaper\": \"%% wallpaper %%\",\n"
+"  \"alpha\": \"100\",\n"
+"  \"special\": {\n"
+"    \"background\": \"#%% background %%\",\n"
+"    \"foreground\": \"#%% foreground %%\",\n"
+"    \"cursor\": \"#%% cursor %%\",\n"
+"    \"border\": \"#%% border %%\"\n"
+"  },\n"
+"  \"colors\": {\n"
+"    \"color0\": \"#%% color0.hex %%\",\n"
+"    \"color1\": \"#%% color1.hex %%\",\n"
+"    \"color2\": \"#%% color2.hex %%\",\n"
+"    \"color3\": \"#%% color3.hex %%\",\n"
+"    \"color4\": \"#%% color4.hex %%\",\n"
+"    \"color5\": \"#%% color5.hex %%\",\n"
+"    \"color6\": \"#%% color6.hex %%\",\n"
+"    \"color7\": \"#%% color7.hex %%\",\n"
+"    \"color8\": \"#%% color8.hex %%\",\n"
+"    \"color9\": \"#%% color9.hex %%\",\n"
+"    \"color10\": \"#%% color10.hex %%\",\n"
+"    \"color11\": \"#%% color11.hex %%\",\n"
+"    \"color12\": \"#%% color12.hex %%\",\n"
+"    \"color13\": \"#%% color13.hex %%\",\n"
+"    \"color14\": \"#%% color14.hex %%\",\n"
+"    \"color15\": \"#%% color15.hex %%\"\n"
+"  }\n"
+"}\n";
 
 /*** 
  * FUNCTIONS DECLARATIONS
@@ -397,6 +434,7 @@ void hellwal_usage(const char *name)
     printf("  -m, --neon-mode                    Enhance colors for a neon effect\n");
     printf("  -r, --random                       Pick random image or theme\n");
     printf("  -q, --quiet                        Suppress output\n");
+    printf("  -j, --json                         Prints colors to stdout in json format, it's skipping templates\n");
     printf("  -s, --script             <script>  Execute script after running hellwal\n");
     printf("  -f, --template-folder    <dir>     Set folder containing templates\n");
     printf("  -o, --output             <dir>     Set output folder for generated templates\n");
@@ -462,6 +500,11 @@ int set_args(int argc, char *argv[])
         else if ((strcmp(argv[i], "--random") == 0 || strcmp(argv[i], "-r") == 0))
         {
             RANDOM_ARG = "";
+        }
+        else if ((strcmp(argv[i], "--json") == 0 || strcmp(argv[i], "-j") == 0))
+        {
+            JSON_ARG = "";
+            QUIET_ARG = "";
         }
         else if ((strcmp(argv[i], "--quiet") == 0 || strcmp(argv[i], "-q") == 0))
         {
@@ -657,6 +700,13 @@ void eu(const char *format, ...)
 /* prints to stderr formatted output and exits with EXIT_FAILURE */
 void err(const char *format, ...)
 {
+    /*
+     * ignores QUIET_ARG
+     *
+    if (QUIET_ARG != NULL)
+        return;
+    */
+
     va_list ap;
     va_start(ap, format);
 
@@ -673,6 +723,9 @@ void err(const char *format, ...)
 /* prints to stderr formatted output, but not exits */
 void warn(const char *format, ...)
 {
+    if (QUIET_ARG != NULL)
+        return;
+
     va_list ap;
     va_start(ap, format);
     fprintf(stderr, "\033[93m[WARN]: ");
@@ -1607,8 +1660,14 @@ void set_term_colors(PALETTE pal)
         globfree(&globbuf);
     }
 
-    /* Also write to the current terminal */
-    fwrite(buffer, 1, offset, stdout);
+    /*
+     * Only write to stdout if it's a terminal,
+     * to not conflict with other programs like jq
+     */
+    if (isatty(STDOUT_FILENO))
+    {
+        fwrite(buffer, 1, offset, stdout);
+    }
 
     log_c("Set colors to [%d] terminals!", succ+1);
 }
@@ -1616,7 +1675,7 @@ void set_term_colors(PALETTE pal)
 /* cache wallpaper color palette */
 void palette_write_cache(char *filepath, PALETTE *p)
 {
-    if (NO_CACHE_ARG != NULL)
+    if (NO_CACHE_ARG != NULL || JSON_ARG != NULL)
         return;
 
     if (filepath == NULL)
@@ -1652,7 +1711,7 @@ void palette_write_cache(char *filepath, PALETTE *p)
     free(full_cache_path);
 }
 
-/* if wallpaper was previously computed, just load it */
+/* if wallpaper was previously computed, if so, just load it */
 int check_cached_palette(char *filepath, PALETTE *p)
 {
     if (NO_CACHE_ARG != NULL)
@@ -1680,11 +1739,13 @@ int check_cached_palette(char *filepath, PALETTE *p)
     char *theme = load_file(full_cache_path);
 
     int result = 1;
-    if (theme == NULL) {
+    if (theme == NULL)
+    {
         warn("Failed to open file: %s", full_cache_path);
         result = 0;
     }
-    else {
+    else
+    {
         /* cached palette is stored as theme */
         result = process_theme(theme, p);
     }
@@ -1739,6 +1800,20 @@ char *load_file(char *filename)
  */
 void process_templating(PALETTE pal)
 {
+    if (JSON_ARG != NULL)
+    {
+        TEMPLATE t;
+        t.content = JSON_TEMPLATE;
+        t.path = "";
+        t.name = "";
+
+        /* printf json template to stdout */
+        process_template(&t, pal);
+        fprintf(stdout, "%s",t.content);
+
+        return;
+    }
+
     if (DEBUG_ARG != NULL)
         log_c("Processing templates: ");
 
