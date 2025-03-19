@@ -1,8 +1,7 @@
 # Hellwal - Fast, Extensible Color Palette Generator
 
 <p align="center">
-    <p>Showcase with <a href="https://github.com/danihek/Themecord">Themecord</a> and <a href="https://github.com/LGFae/swww">swww</a></p>
-    <img src="https://github.com/user-attachments/assets/ee6a9753-1996-4b80-b8e6-8e4e9c96d57c" alt="Preview" width="1200">
+    <img align="center" src="https://raw.githubusercontent.com/danihek/trashcan/refs/heads/main/hellwal1.0.3.gif" alt="Preview" width="500">
 </p>
 
 ## Installation
