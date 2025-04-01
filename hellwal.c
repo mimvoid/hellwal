@@ -368,6 +368,7 @@ char *palette_color(PALETTE pal, unsigned c, char *fmt);
 void invert_palette(PALETTE *p);
 void print_palette(PALETTE pal);
 void reverse_palette(PALETTE *palette);
+void palette_handle_neon_mode(PALETTE *p);
 void palette_handle_dark_mode(PALETTE *p);
 void palette_handle_light_mode(PALETTE *p);
 void palette_handle_color_mode(PALETTE *p);
@@ -1061,7 +1062,9 @@ void apply_addtional_arguments(PALETTE *p)
     if (THEME_ARG == NULL &&
             (LIGHT_ARG == NULL && COLOR_ARG == NULL && DARK_ARG == NULL))
         DARK_ARG = "";
-
+    
+    if (NEON_MODE_ARG != NULL)
+        palette_handle_neon_mode(p);
     if (DARK_ARG  != NULL)
         palette_handle_dark_mode(p);
     if (LIGHT_ARG != NULL)
@@ -1137,6 +1140,36 @@ void palette_handle_dark_mode(PALETTE *p)
     p->colors[0] = darken_color(p->colors[0], 0.7f);    // BG
     p->colors[15] = lighten_color(p->colors[15], 0.5f); // FG
     p->colors[7] = lighten_color(p->colors[7], 0.4f);   // Term text
+}
+
+void palette_handle_neon_mode(PALETTE *p)
+{
+        if (DEBUG_ARG != NULL)
+            log_c("Applying NEON MODE:\n\n");
+
+        for (int i = 0; i < PALETTE_SIZE/2; i++)
+        {
+            if (i > 0)
+            {
+                HSL hsl = rgb_to_hsl(p->colors[i]);
+
+                if (hsl.L <= 0.1f || hsl.L >= 0.9f)
+                    continue;
+
+                hsl.S = clamp_float(hsl.S * 1.25f, 0.6f, 1.0f);
+                hsl.L = clamp_float(hsl.L * 1.15f, 0.3f, 0.9f);
+
+                p->colors[i] = hsl_to_rgb(hsl);
+            }
+
+            if (DEBUG_ARG != NULL)
+            {
+                print_color(p->colors[i]);
+                printf(" | (%d, %d, %d)\n", p->colors[i].R, p->colors[i].G, p->colors[i].B);
+            }
+        }
+        if (DEBUG_ARG != NULL)
+            log_c("\n");
 }
 
 PALETTE gen_palette(IMG *img)
@@ -1247,35 +1280,6 @@ PALETTE gen_palette(IMG *img)
     if (DEBUG_ARG != NULL)
         log_c("\n---\n");
 
-    if (NEON_MODE_ARG != NULL)
-    {
-        if (DEBUG_ARG != NULL)
-            log_c("Applying NEON MODE:\n\n");
-
-        for (int i = 0; i < PALETTE_SIZE/2; i++)
-        {
-            if (i > 0)
-            {
-                HSL hsl = rgb_to_hsl(palette.colors[i]);
-
-                if (hsl.L <= 0.1f || hsl.L >= 0.9f)
-                    continue;
-
-                hsl.S = clamp_float(hsl.S * 1.25f, 0.6f, 1.0f);
-                hsl.L = clamp_float(hsl.L * 1.15f, 0.3f, 0.9f);
-
-                palette.colors[i] = hsl_to_rgb(hsl);
-            }
-
-            if (DEBUG_ARG != NULL)
-            {
-                print_color(palette.colors[i]);
-                printf(" | (%d, %d, %d)\n", palette.colors[i].R, palette.colors[i].G, palette.colors[i].B);
-            }
-        }
-        if (DEBUG_ARG != NULL)
-            log_c("\n");
-    }
     sort_palette_by_luminance(&palette);
 
     for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
