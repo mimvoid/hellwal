@@ -1,4 +1,4 @@
-/*  hellwal - v1.0.2 - MIT LICENSE
+/*  hellwal - v1.0.3 - MIT LICENSE
  *
  *  [ ] TODO: support for other OS's like Mac or Win                        
  *  ------------------------------------------------------------------------
@@ -110,6 +110,8 @@
 #define HELL_PARSER_IMPLEMENTATION
 #include "hell_parser.h"
 
+#define HELL_COLORS_IMPLEMENTATION
+#include "hell_colors.h"
 
 /***
  * MACROS
@@ -154,21 +156,6 @@ typedef struct
     unsigned width;
     unsigned height;
 } IMG;
-
-/* RGB,
- * what can I say huh */
-typedef struct
-{
-    uint8_t R; // Red   [0, 255]
-    uint8_t G; // Green [0, 255]
-    uint8_t B; // Blue  [0, 255]
-} RGB;
-
-typedef struct {
-    float H; // Hue        [0, 360]
-    float S; // Saturation [0, 1]
-    float L; // Luminance  [0, 1]
-} HSL;
 
 /* PALETTE
  *
@@ -332,10 +319,10 @@ char *JSON_TEMPLATE =
 int set_args(int argc, char *argv[]);
 
 /* utils */
-RGB clamp_rgb(RGB color);
-uint8_t clamp_uint8(int value);
-int is_between_01_float(const char *str);
 float clamp_float(float value, float min, float max);
+
+int is_between_01_float(const char *str);
+int _compare_luminance_qsort(const void *a, const void *b);
 
 char *rand_file(char *path);
 char *home_full_path(const char* path);
@@ -355,34 +342,16 @@ void log_c(const char *format, ...);
 IMG *img_load(char *filename);
 void img_free(IMG *img);
 
-/* RGB */
-void print_rgb(RGB col);
-RGB hsl_to_rgb(HSL hsl);
-HSL rgb_to_hsl(RGB color);
-void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes);
-
-float calculate_luminance(RGB c);
-float color_distance(RGB color1, RGB color2);
-float calculate_color_distance(RGB a, RGB b);
-
-int is_more_colorful(RGB a, RGB b);
-int is_color_palette_var(char *name);
+/* color related stuff */
 int hex_to_rgb(const char *hex, RGB *p);
-int compare_luminance(const void *a, const void *b);
 int get_channel(RGB *colors, size_t start, size_t end, int channel);
 int is_color_too_similar(RGB *palette, int num_colors, RGB new_color);
 
 RGB apply_offsets(RGB c);
 RGB apply_grayscale(RGB c);
-RGB to_grayscale(RGB color);
-RGB darken_color(RGB color, float factor);
-RGB lighten_color(RGB color, float factor);
-RGB saturate_color(RGB color, float factor);
-RGB adjust_luminance(RGB color, float factor);
 RGB bin_to_color(int r_bin, int g_bin, int b_bin);
 RGB average_color(IMG *img, size_t start, size_t end);
-RGB blend_colors(const RGB color1, const RGB color2, float blend_factor);
-RGB blend_with_brightness(RGB bright_color, RGB mix_color, float mix_ratio);
+void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes);
 
 /* term, set for all active terminals ANSI escape codes */
 void set_term_colors(PALETTE pal);
@@ -390,10 +359,11 @@ void set_term_colors(PALETTE pal);
 /* palettes */
 PALETTE gen_palette(IMG *img);
 PALETTE get_color_palette(PALETTE p);
-char *palette_color(PALETTE pal, unsigned c, char *fmt);
 
+int is_color_palette_var(char *name);
 int check_cached_palette(char *filepath, PALETTE *p);
 void palette_write_cache(char *filepath, PALETTE *p);
+char *palette_color(PALETTE pal, unsigned c, char *fmt);
 
 void invert_palette(PALETTE *p);
 void print_palette(PALETTE pal);
@@ -420,7 +390,7 @@ int process_theme(char *t, PALETTE *pal);
  * FUNCTIONS DECLARATIONS
  ***/
 
- /* prints usage to stdout */
+/* prints usage to stdout */
 void hellwal_usage(const char *name)
 {
     printf("Usage:\n");
@@ -677,6 +647,17 @@ int set_args(int argc, char *argv[])
     return 0;
 }
 
+/* Writes color as block to stdout - it does not perform new line by itself */
+void print_color(RGB col)
+{
+    if (QUIET_ARG != NULL)
+        return;
+
+    /* Write color from as colored block */
+    fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", col.R, col.G, col.B);
+    fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", col.R, col.G, col.B);
+}
+
 /* 
  * prints to stderr formatted output and exits with EXIT_FAILURE,
  * also prints hellwal_usage()
@@ -703,9 +684,9 @@ void err(const char *format, ...)
     /*
      * ignores QUIET_ARG
      *
-    if (QUIET_ARG != NULL)
-        return;
-    */
+     if (QUIET_ARG != NULL)
+     return;
+     */
 
     va_list ap;
     va_start(ap, format);
@@ -807,25 +788,6 @@ float clamp_float(float value, float min, float max)
     return value < min ? min : (value > max ? max : value);
 }
 
-/* avoid exceeding max value */
-uint8_t clamp_uint8(int value)
-{
-    if (value < 0) return 0;
-    if (value > 255) return 255;
-    return (uint8_t)value;
-}
-
-/* avoid exceeding max value for each */
-RGB clamp_rgb(RGB color)
-{
-    return (RGB)
-    {
-        .R = clamp_uint8(color.R),
-        .G = clamp_uint8(color.G),
-        .B = clamp_uint8(color.B)
-    };
-}
-
 /* get random file from given path */
 char *rand_file(char *path)
 {
@@ -897,135 +859,20 @@ int is_between_01_float(const char *str)
     return (number >= 0.0 && number <= 1.0);
 }
 
-/* calculate how bright is color */
-float calculate_luminance(RGB c)
+int _compare_luminance_qsort(const void *a, const void *b)
 {
-    return (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B); 
+    RGB *color_a = (RGB *)a;
+    RGB *color_b = (RGB *)b;
+
+    if (color_a == NULL || color_b == NULL) return 1;
+
+    return compare_luminance(*color_a, *color_b);
 }
 
 /* sort palette by luminance to spread out colors */
 void sort_palette_by_luminance(PALETTE *palette)
 {
-    qsort(palette->colors, PALETTE_SIZE/2, sizeof(RGB), compare_luminance);
-}
-
-/* compare two RGB colors */
-int compare_luminance(const void *a, const void *b)
-{
-    RGB *color_a = (RGB *)a;
-    RGB *color_b = (RGB *)b;
-
-    float lum_a = calculate_luminance(*color_a);
-    float lum_b = calculate_luminance(*color_b);
-
-    if (lum_a < lum_b)
-        return -1;
-    else if (lum_a > lum_b)
-        return 1;
-    else
-        return 0;
-}
-
-/* saturate a color */
-RGB saturate_color(RGB color, float factor)
-{
-    float max_val = fmaxf(color.R, fmaxf(color.G, color.B));
-    color.R = (uint8_t)(color.R + (max_val - color.R) * factor);
-    color.G = (uint8_t)(color.G + (max_val - color.G) * factor);
-    color.B = (uint8_t)(color.B + (max_val - color.B) * factor);
-    return color;
-}
-
-RGB to_grayscale(RGB color)
-{
-    uint8_t gray_value = (uint8_t)(0.299f * color.R + 0.587f * color.G + 0.114f * color.B);
-    return (RGB){gray_value, gray_value, gray_value};
-}
-
-/* Convert RGB to hsl */
-HSL rgb_to_hsl(RGB color)
-{
-    float r = color.R / 255.0f;
-    float g = color.G / 255.0f;
-    float b = color.B / 255.0f;
-    
-    float max_val = fmaxf(r, fmaxf(g, b));
-    float min_val = fminf(r, fminf(g, b));
-    float delta = max_val - min_val;
-
-    HSL hsl;
-    hsl.L = max_val;
-
-    if (max_val != 0)
-    {
-        hsl.S = delta / max_val; // Saturation
-    }
-    else
-    {
-        hsl.S = 0;
-        hsl.H = -1;
-        return hsl;
-    }
-
-    if (delta == 0)
-    {
-        hsl.H = 0;
-    }
-    else
-    {
-        if (r == max_val)
-        {
-            hsl.H = (g - b) / delta;
-        }
-        else if (g == max_val)
-        {
-            hsl.H = 2 + (b - r) / delta;
-        }
-        else
-        {
-            hsl.H = 4 + (r - g) / delta;
-        }
-
-        hsl.H *= 60;
-
-        if (hsl.H < 0)
-        {
-            hsl.H += 360;
-        }
-    }
-
-    return hsl;
-}
-
-/* chatgpt generated it xd */
-RGB hsl_to_rgb(HSL hsl)
-{
-    float C = (1 - fabsf(2 * hsl.L - 1)) * hsl.S;
-    float X = C * (1 - fabsf(fmodf(hsl.H / 60.0f, 2) - 1));
-    float m = hsl.L - C / 2;
-
-    float r = 0, g = 0, b = 0;
-
-    if (hsl.H >= 0 && hsl.H < 60) {
-        r = C, g = X, b = 0;
-    } else if (hsl.H >= 60 && hsl.H < 120) {
-        r = X, g = C, b = 0;
-    } else if (hsl.H >= 120 && hsl.H < 180) {
-        r = 0, g = C, b = X;
-    } else if (hsl.H >= 180 && hsl.H < 240) {
-        r = 0, g = X, b = C;
-    } else if (hsl.H >= 240 && hsl.H < 300) {
-        r = X, g = 0, b = C;
-    } else if (hsl.H >= 300 && hsl.H < 360) {
-        r = C, g = 0, b = X;
-    }
-
-    RGB rgb;
-    rgb.R = (uint8_t)((r + m) * 255);
-    rgb.G = (uint8_t)((g + m) * 255);
-    rgb.B = (uint8_t)((b + m) * 255);
-
-    return rgb;
+    qsort(palette->colors, PALETTE_SIZE/2, sizeof(RGB), _compare_luminance_qsort);
 }
 
 /* function to reverse the palette, used when light mode is specified */
@@ -1053,12 +900,6 @@ int get_channel(RGB *colors, size_t start, size_t end, int channel)
     return max - min;
 }
 
-/* check Euclidean distance between two colors to ensure diversity */
-float calculate_color_distance(RGB a, RGB b)
-{
-    return sqrtf(powf(a.R - b.R, 2) + powf(a.G - b.G, 2) + powf(a.B - b.B, 2));
-}
-
 /* ensure that new color is not too similar to existing colors in the palette */
 int is_color_too_similar(RGB *palette, int num_colors, RGB new_color)
 {
@@ -1068,45 +909,6 @@ int is_color_too_similar(RGB *palette, int num_colors, RGB new_color)
             return 1;  // Color is too similar
     }
     return 0;
-}
-
-/* blend two colors together based on a blend factor */
-RGB blend_colors(RGB c1, RGB c2, float weight) {
-    weight = (weight < 0.0f) ? 0.0f : (weight > 1.0f) ? 1.0f : weight; // Clamp weight
-    return clamp_rgb((RGB){
-        .R = (int)(c1.R * (1 - weight) + c2.R * weight),
-        .G = (int)(c1.G * (1 - weight) + c2.G * weight),
-        .B = (int)(c1.B * (1 - weight) + c2.B * weight)
-    });
-}
-
-/* 
- * blend two colors together based on a blend factor,
- * bright mode - leave little color accent on white surface
- */
-RGB blend_with_brightness(RGB bright_color, RGB mix_color, float mix_ratio)
-{
-    if (mix_ratio < 0.0f) mix_ratio = 0.0f;
-    if (mix_ratio > 1.0f) mix_ratio = 1.0f;
-
-    RGB blended;
-    blended.R = bright_color.R + mix_ratio * (mix_color.R - bright_color.R);
-    blended.G = bright_color.G + mix_ratio * (mix_color.G - bright_color.G);
-    blended.B = bright_color.B + mix_ratio * (mix_color.B - bright_color.B);
-
-    uint8_t max_channel = blended.R > blended.G ? 
-                          (blended.R > blended.B ? blended.R : blended.B) : 
-                          (blended.G > blended.B ? blended.G : blended.B);
-
-    if (max_channel > 0 && max_channel < 255)
-    {
-        float adjustment = 255.0f / (float)max_channel;
-        blended.R = (uint8_t)(blended.R * adjustment);
-        blended.G = (uint8_t)(blended.G * adjustment);
-        blended.B = (uint8_t)(blended.B * adjustment);
-    }
-
-    return blended;
 }
 
 /* calculate the average color of a given pixel range in an image */
@@ -1141,28 +943,6 @@ RGB bin_to_color(int r_bin, int g_bin, int b_bin)
         .G = g_bin * (256 / BINS),
         .B = b_bin * (256 / BINS)
     });
-}
-
-/* adjust luminance of a color */
-RGB adjust_luminance(RGB color, float factor)
-{
-    return (RGB){
-        .R = (uint8_t)fminf(color.R * factor, 255),
-        .G = (uint8_t)fminf(color.G * factor, 255),
-        .B = (uint8_t)fminf(color.B * factor, 255)
-    };
-}
-
-/* lighten a color by a factor */
-RGB lighten_color(RGB color, float factor)
-{
-    return adjust_luminance(color, 1.0f + factor);
-}
-
-/* darken a color by a factor */
-RGB darken_color(RGB color, float factor)
-{
-    return adjust_luminance(color, 1.0f - factor);
 }
 
 void invert_palette(PALETTE *p)
@@ -1425,11 +1205,11 @@ PALETTE gen_palette(IMG *img)
             printf("(%d, %d, %d)", blended_colors.R, blended_colors.G, blended_colors.B);
             printf("\n");
 
-            print_rgb(avg_color);
+            print_color(avg_color);
             printf(" - ");
-            print_rgb(bin_color);
+            print_color(bin_color);
             printf(" = ");
-            print_rgb(blended_colors);
+            print_color(blended_colors);
 
             printf("\nLUM: %f", calculate_luminance(blended_colors));
             printf("\n\n");
@@ -1489,7 +1269,7 @@ PALETTE gen_palette(IMG *img)
 
             if (DEBUG_ARG != NULL)
             {
-                print_rgb(palette.colors[i]);
+                print_color(palette.colors[i]);
                 printf(" | (%d, %d, %d)\n", palette.colors[i].R, palette.colors[i].G, palette.colors[i].B);
             }
         }
@@ -1506,17 +1286,6 @@ PALETTE gen_palette(IMG *img)
     return palette;
 }
 
-/* Writes color as block to stdout - it does not perform new line by itself */
-void print_rgb(RGB col)
-{
-    if (QUIET_ARG != NULL)
-        return;
-
-    /* Write color from as colored block */
-    fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", col.R, col.G, col.B);
-    fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", col.R, col.G, col.B);
-}
-
 /* Writes palete to stdout */
 void print_palette(PALETTE pal)
 {
@@ -1525,7 +1294,7 @@ void print_palette(PALETTE pal)
 
     for (size_t i=0; i<PALETTE_SIZE; i++)
     {
-        print_rgb(pal.colors[i]);
+        print_color(pal.colors[i]);
         if (i+1 == PALETTE_SIZE/2) printf("\n");
     }
     printf("\n");
@@ -2189,11 +1958,6 @@ int hex_to_rgb(const char *hex, RGB *p)
     }
 
     return 1;
-}
-
-int is_more_colorful(RGB a, RGB b)
-{
-    return rgb_to_hsl(a).S > rgb_to_hsl(b).S;
 }
 
 int is_color_palette_var(char *name)
