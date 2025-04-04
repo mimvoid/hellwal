@@ -15,7 +15,8 @@
  *  [x] TODO: parsing                                                       
  *
  * changelog v1.0.4:
- *  - added --skip-term-colors - it skips setting colors(printing escape codes) to the terminals
+ *  - added alpha variable, you can set alpha by providing it right after keyword in templates (e.g. "%% color1.hex alpha=0.5%%") - requested in issues by @chinh4thepro
+ *  - added --skip-term-colors - it skips setting colors(printing escape codes) to the terminals - requested in issues by @SherLock707
  *  - separeted color related functions from hellwal.c into its own header only library
  *
  * changelog v1.0.3:
@@ -178,6 +179,8 @@ typedef struct
     char *content;
 } TEMPLATE;
 
+/* COLOR_TYPES - helps to manage colors within the code */
+enum COLOR_TYPES { HEX_t, RGB_t };
 
 /***
  * GLOBAL VARIABLES
@@ -338,6 +341,7 @@ void check_output_dir(char *path);
 void remove_whitespaces(char *str);
 void run_script(const char *script);
 void hellwal_usage(const char *name);
+void remove_extra_whitespaces(char *str);
 
 /* logging */
 void eu(const char *format, ...);
@@ -370,7 +374,9 @@ PALETTE get_color_palette(PALETTE p);
 int is_color_palette_var(char *name);
 int check_cached_palette(char *filepath, PALETTE *p);
 void palette_write_cache(char *filepath, PALETTE *p);
-char *palette_color(PALETTE pal, unsigned c, char *fmt);
+char *process_variable_alpha(char *color, char *value, enum COLOR_TYPES type);
+char *palette_color(PALETTE pal, unsigned c, enum COLOR_TYPES type);
+char *process_addtional_variables(char *color, char *right_token, enum COLOR_TYPES type);
 
 void invert_palette(PALETTE *p);
 void print_palette(PALETTE pal);
@@ -861,6 +867,43 @@ void remove_whitespaces(char *str)
     *write = '\0';
 }
 
+/* make sure that buffer does not
+ * start or ends with space, and
+ * only occurs once between characters
+ */
+void remove_extra_whitespaces(char *str)
+{
+    int read = 0, write = 0;
+    int space_found = 0;
+    
+    while (str[read] == ' ' || str[read] == '\t' || str[read] == '\n' || str[read] == '\r') read++;
+    
+    while (str[read])
+    {
+        if (str[read] == ' ' || str[read] == '\t' || str[read] == '\n' || str[read] == '\r')
+        {
+            if (!space_found)
+            {
+                str[write++] = ' ';
+                space_found = 1;
+            }
+        }
+        else
+        {
+            str[write++] = str[read];
+            space_found = 0;
+        }
+        read++;
+    }
+    
+    if (write > 0 && str[write - 1] == ' ')
+    {
+        write--;
+    }
+    
+    str[write] = '\0';
+}
+
 int is_between_01_float(const char *str)
 {
     char *end;
@@ -929,6 +972,7 @@ RGB average_color(IMG *img, size_t start, size_t end)
 {
     long sum_r = 0, sum_g = 0, sum_b = 0;
     size_t count = end - start;
+    if (count <= 0) count++;
 
     for (size_t i = start; i < end; i++)
     {
@@ -1317,16 +1361,25 @@ void print_palette(PALETTE pal)
 }
 
 /* 
- * Write color palette to buffer you HAVE TO specify char *fmt
- * for 3 uint8_t values, otherwise it will crash.
+ * Write color palette to buffer, hex or rgb by setting up type
  */
-char *palette_color(PALETTE pal, unsigned c, char *fmt)
+char *palette_color(PALETTE pal, unsigned c, enum COLOR_TYPES type)
 {
     if (c > PALETTE_SIZE - 1)
         return NULL;
 
+    char *hex_fmt = "%02x%02x%02x";
+    char *rgb_fmt = "%d, %d, %d";
     char *buffer = (char*)malloc(64);
-    sprintf(buffer, fmt, pal.colors[c].R, pal.colors[c].G, pal.colors[c].B);
+
+    if (type == HEX_t)
+    {
+        sprintf(buffer, hex_fmt, pal.colors[c].R, pal.colors[c].G, pal.colors[c].B);
+    }
+    else
+    {
+        sprintf(buffer, rgb_fmt, pal.colors[c].R, pal.colors[c].G, pal.colors[c].B);
+    }
 
     return buffer;
 }
@@ -1412,13 +1465,13 @@ void set_term_colors(PALETTE pal)
         /* Create the sequences */
         for (unsigned i = 0; i < PALETTE_SIZE; i++)
         {
-            const char *color = palette_color(pal, i, "%02x%02x%02x");
+            const char *color = palette_color(pal, i, HEX_t);
             offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_p, i, color);
         }
-        const char *bg_color     = palette_color(pal, 0,  "%02x%02x%02x");
-        const char *fg_color     = palette_color(pal, 15, "%02x%02x%02x");
-        const char *cursor_color = palette_color(pal, 15, "%02x%02x%02x");
-        const char *border_color = palette_color(pal, 15, "%02x%02x%02x");
+        const char *bg_color     = palette_color(pal, 0,  HEX_t);
+        const char *fg_color     = palette_color(pal, PALETTE_SIZE - 1, HEX_t);
+        const char *cursor_color = palette_color(pal, PALETTE_SIZE - 1, HEX_t);
+        const char *border_color = palette_color(pal, PALETTE_SIZE - 1, HEX_t);
 
         fg_color = fg_color ? fg_color : "FFFFFF";             /* Default to white */
         bg_color = bg_color ? bg_color : "000000";             /* Default to black */
@@ -1544,6 +1597,65 @@ int check_cached_palette(char *filepath, PALETTE *p)
     free(full_cache_path);
 
     return result;
+}
+
+char *process_addtional_variables(char *color, char *right_token, enum COLOR_TYPES type)
+{
+    if (color == NULL) return NULL;
+    if (right_token == NULL) return color;
+    char *result = NULL;
+
+    hell_parser_t *p = hell_parser_create(right_token);
+    if (hell_parser_delim(p, '=', 1) == HELL_PARSER_OK)
+    {
+        size_t var_size = p->pos - 1;
+        size_t val_size = p->length - p->pos + 1;
+
+        char *variable = calloc(1, var_size);
+        char *value = calloc(1, val_size);
+
+        strncpy(variable, p->input, var_size);
+        strncpy(value, p->input + p->pos + 1, val_size);
+
+        if (!strcmp(variable, "alpha"))
+        {
+            result = process_variable_alpha(color, value, type);
+        }
+    }
+
+    if (result != NULL)
+        return result;
+
+     return color;
+}
+
+char *process_variable_alpha(char *color, char *value, enum COLOR_TYPES type)
+{
+    float alpha_value = 1.f;
+    char *buffer = NULL;
+
+    if (is_between_01_float(value))
+        alpha_value = strtod(value, NULL);
+    else
+        return color;
+
+    if (type == HEX_t)
+    {
+        buffer = malloc(sizeof(color) + 3); // 3 because 2 next hex aplha numbers
+                                            // and 1 null termination
+        int a = (int)(alpha_value * 255);
+        sprintf(buffer, "%s%02x", color, a);
+    }
+    else // if its not hex we are assuming its rgb
+    {
+        buffer = malloc(sizeof(color) + sizeof(",    "));
+        sprintf(buffer, "%s, %f", color, alpha_value);
+    }
+
+    if (buffer != NULL)
+        return buffer;
+
+    return color;
 }
 
 /* 
@@ -1688,6 +1800,7 @@ void process_template(TEMPLATE *t, PALETTE pal)
                     size_t len = 0;
                     char *var_arg = NULL;
                     char *delim_buf = NULL;
+                    enum COLOR_TYPES type = HEX_t; // 0 means hex, 1 means rgb
 
                     last_pos = p->pos + 1;
 
@@ -1699,13 +1812,94 @@ void process_template(TEMPLATE *t, PALETTE pal)
                         strncat(template_buffer, p->input + buffrd_pos, size_before_delim);
                     }
 
+                    /* extract hellwal template style from templates:
+                     *
+                     * example:
+                     *    ```template.hellwal
+                     *
+                     *      random text here
+                     *      some randome values
+                     *
+                     *      %% color1.hex %%  \
+                     *      %% color2.hex %%   → -- this is being proccessed by hell_parser
+                     *      %% color3.hex %%  /
+                     *
+                     *    ```
+                     *
+                     */
                     if (hell_parser_delim_buffer_between(p, HELLWAL_DELIM, HELLWAL_DELIM_COUNT, &delim_buf) == HELL_PARSER_OK)
                     {
-                        hell_parser_t *pd = hell_parser_create(delim_buf);
-                        if (pd == NULL)
+                        remove_extra_whitespaces(delim_buf);
+                        hell_parser_t *pdt = hell_parser_create(delim_buf);
+                        char *L_TOKEN = NULL;
+                        char *R_TOKEN = NULL;
+
+                        if (pdt == NULL)
                             err("Failed to allocate parser");
 
-                        remove_whitespaces(delim_buf);
+                        /* tokenize it by ' ':
+                         *
+                         *  %%color0.hex alpha=0.1%    -   this will turn into: 
+                         *    L_TOKEN = "color0.hex";
+                         *    R_TOKEN = "alpha=1.1";
+                         *
+                         * --------------------------------------------------
+                         *
+                         *  %%color4 alpha=0.5%%
+                         *    L_TOKEN = "color4";
+                         *    R_TOKEN = "alpha=0.5";
+                         *
+                         * --------------------------------------------------
+                         *
+                         *  %%color7%%"   -   hell_parser_delim will fail and go to else statement
+                         *    L_TOKEN = "color7";
+                         *    R_TOKEN = NULL;
+                         *
+                         */
+
+                        if (hell_parser_delim(pdt, ' ', 1) == HELL_PARSER_OK) // TODO: make it work with other variables
+                                                                              // (that dont exist yet) - for now this function
+                                                                              // assumes that there are no more than 2 variables
+                                                                              // provided (e.g. color1 + alpha for example)
+                        {
+                            size_t l_size = pdt->pos - 1;
+                            size_t r_size = pdt->length - pdt->pos;
+
+                            char *left  = calloc(1, l_size);
+                            char *right = calloc(1, r_size);
+
+                            strncpy(left, pdt->input, l_size);
+                            strncpy(right, pdt->input + pdt->pos, r_size);
+
+                            if (DEBUG_ARG != NULL)
+                                log_c("\nLEFT: %s\nRIGHT: %s\n", left, right);
+
+                            L_TOKEN = left;
+                            R_TOKEN = right;
+
+                            if (!strcmp(L_TOKEN, "") ||
+                                    (R_TOKEN != NULL && !strcmp(R_TOKEN, "")))
+                            {
+                                free(R_TOKEN);
+                                R_TOKEN = NULL;
+                                L_TOKEN = delim_buf;
+                            }
+                            
+                            if (DEBUG_ARG != NULL)
+                            {
+                                log_c("--------------------------------------------------");
+                                log_c("L_TOKEN: %s", L_TOKEN);
+                                log_c("R_TOKEN: %s", R_TOKEN);
+                            }
+                        }
+                        else
+                        {
+                            L_TOKEN = delim_buf;
+                        }
+
+                        hell_parser_t *pd = hell_parser_create(L_TOKEN);
+                        if (pd == NULL)
+                            err("Failed to allocate parser");
 
                         if (hell_parser_delim(pd, '.', 1) == HELL_PARSER_OK)
                         {
@@ -1729,23 +1923,32 @@ void process_template(TEMPLATE *t, PALETTE pal)
                                  * if not output will always be hex
                                  */
                                 if (!strcmp(right, "rgb"))
-                                    var_arg = palette_color(pal, idx, "%d, %d, %d");
+                                {
+                                    var_arg = palette_color(pal, idx, RGB_t);
+                                    type = RGB_t;
+                                }
                                 else
-                                    var_arg = palette_color(pal, idx, "%02x%02x%02x");
+                                    var_arg = palette_color(pal, idx, HEX_t);
                             }
                             else if (!strcmp(left, "foreground") || !strcmp(left, "cursor") || !strcmp(left, "border"))
                             {
                                 if (!strcmp(right, "rgb"))
-                                    var_arg = palette_color(pal, 15, "%d, %d, %d");
+                                {
+                                    var_arg = palette_color(pal, PALETTE_SIZE - 1, RGB_t);
+                                    type = RGB_t;
+                                }
                                 else
-                                    var_arg = palette_color(pal, 15, "%02x%02x%02x");
+                                    var_arg = palette_color(pal, PALETTE_SIZE - 1, HEX_t);
                             }
                             else if (!strcmp(left, "background"))
                             {
                                 if (!strcmp(right, "rgb"))
-                                    var_arg = palette_color(pal, 0, "%d, %d, %d");
+                                {
+                                    var_arg = palette_color(pal, 0, RGB_t);
+                                    type = RGB_t;
+                                }
                                 else
-                                    var_arg = palette_color(pal, 0, "%02x%02x%02x");
+                                    var_arg = palette_color(pal, 0, HEX_t);
                             }
 
                             free(left);
@@ -1766,19 +1969,23 @@ void process_template(TEMPLATE *t, PALETTE pal)
                         }
                         /* check other keywords */
                         else if (!strcmp(delim_buf, "foreground") || !strcmp(delim_buf, "cursor") || !strcmp(delim_buf, "border"))
-                            var_arg = palette_color(pal, 15, "%02x%02x%02x");
+                            var_arg = palette_color(pal, PALETTE_SIZE - 1, HEX_t);
                         else if (!strcmp(delim_buf, "background"))
-                            var_arg = palette_color(pal, 0, "%02x%02x%02x");
+                            var_arg = palette_color(pal, 0, HEX_t);
                         else
                         {
                             /* '.' was not found, try to find color, put hex by default on it */
-                            idx = is_color_palette_var(delim_buf);
+                            idx = is_color_palette_var(L_TOKEN);
 
                             if (idx != -1)
-                                var_arg = palette_color(pal, idx, "%02x%02x%02x");
+                                var_arg = palette_color(pal, idx, HEX_t);
                         }
 
-                        if (var_arg != NULL) {
+                        if (var_arg != NULL)
+                        {
+                            // process alpha if provided by R_TOKEN
+                            var_arg = process_addtional_variables(var_arg, R_TOKEN, type);
+
                             len = strlen(var_arg);
                             template_size += len + 1;
                             template_buffer = realloc(template_buffer, template_size);
@@ -1792,6 +1999,7 @@ void process_template(TEMPLATE *t, PALETTE pal)
                         skip = 0;
                         free(delim_buf);
                         hell_parser_destroy(pd);
+                        hell_parser_destroy(pdt);
                     }
                 }
             }
