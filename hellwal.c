@@ -14,6 +14,10 @@
  *  [x] TODO: templating                                                    
  *  [x] TODO: parsing                                                       
  *
+ * changelog v1.0.4:
+ *  - added --skip-term-colors - it skips setting colors(printing escape codes) to the terminals
+ *  - separeted color related functions from hellwal.c into its own header only library
+ *
  * changelog v1.0.3:
  *  - added --json (-j) mode - it prints colors in stdout in json format, REAMDE
  *  - fixed --help, I forgot to add some --cmdline args
@@ -128,7 +132,6 @@
     else \
         x = home_full_path(x);
 
-
 /***
  * STRUCTURES
  ***/
@@ -191,6 +194,10 @@ char *IMAGE_ARG = NULL;
  * otherwise its going to print everthing normally 
  */
 char *QUIET_ARG = NULL;
+
+/* if used, it will skip
+ * setting colors to terminals */
+char *SKIP_TERM_COLORS = NULL;
 
 /* darkmode, lightmode and colormode - darkmode is default */
 char *DARK_ARG  = NULL;
@@ -416,6 +423,7 @@ void hellwal_usage(const char *name)
     printf("  -b, --bright-offset      <value>   Adjust brightness offset (0-1) (float)\n");
     printf("  --debug                            Enable debug mode\n");
     printf("  --no-cache                         Disable caching\n");
+    printf("  --skip-term-colors                 Skip setting colors to the terminal\n");
     printf("  --static-background \"#hex\"         Set static background color\n");
     printf("  --static-foreground \"#hex\"         Set static foreground color\n");
     printf("  -h, --help                         Display this help and exit\n\n");
@@ -480,6 +488,10 @@ int set_args(int argc, char *argv[])
         else if ((strcmp(argv[i], "--quiet") == 0 || strcmp(argv[i], "-q") == 0))
         {
             QUIET_ARG = "";
+        }
+        else if (strcmp(argv[i], "--skip-term-colors") == 0)
+        {
+            SKIP_TERM_COLORS = "";
         }
         else if (strcmp(argv[i], "--debug") == 0)
         {
@@ -1388,61 +1400,65 @@ void img_free(IMG *img)
  */
 void set_term_colors(PALETTE pal)
 {
-    char buffer[1024];
-    size_t offset = 0;
-
-    const char *fmt_s = "\033]%d;#%s\033\\";
-    const char *fmt_p = "\033]4;%d;#%s\033\\";
-
-    /* Create the sequences */
-    for (unsigned i = 0; i < PALETTE_SIZE; i++)
-    {
-        const char *color = palette_color(pal, i, "%02x%02x%02x");
-        offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_p, i, color);
-    }
-    const char *bg_color     = palette_color(pal, 0,  "%02x%02x%02x");
-    const char *fg_color     = palette_color(pal, 15, "%02x%02x%02x");
-    const char *cursor_color = palette_color(pal, 15, "%02x%02x%02x");
-    const char *border_color = palette_color(pal, 15, "%02x%02x%02x");
-
-    fg_color = fg_color ? fg_color : "FFFFFF";             /* Default to white */
-    bg_color = bg_color ? bg_color : "000000";             /* Default to black */
-    cursor_color = cursor_color ? cursor_color : "FFFFFF"; /* Default to white */
-    border_color = border_color ? border_color : "000000"; /* Default to black */
-
-    offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_s, 10, fg_color);
-    offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_s, 11, bg_color);
-    offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_s, 12, cursor_color);
-    offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_s, 708, border_color);
-
-    /* Broadcast the sequences to all terminal devices */
     size_t succ = 0;
-    glob_t globbuf;
-    if (glob("/dev/pts/*", GLOB_NOSORT, NULL, &globbuf) == 0)
+    if (SKIP_TERM_COLORS == NULL)
     {
-        for (size_t i = 0; i < globbuf.gl_pathc; i++)
+        char buffer[1024];
+        size_t offset = 0;
+
+        const char *fmt_s = "\033]%d;#%s\033\\";
+        const char *fmt_p = "\033]4;%d;#%s\033\\";
+
+        /* Create the sequences */
+        for (unsigned i = 0; i < PALETTE_SIZE; i++)
         {
-            FILE *f = fopen(globbuf.gl_pathv[i], "w");
-            if (f)
-            {
-                fwrite(buffer, 1, offset, f);
-                fclose(f);
-                succ++;
-            }
+            const char *color = palette_color(pal, i, "%02x%02x%02x");
+            offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_p, i, color);
         }
-        globfree(&globbuf);
-    }
+        const char *bg_color     = palette_color(pal, 0,  "%02x%02x%02x");
+        const char *fg_color     = palette_color(pal, 15, "%02x%02x%02x");
+        const char *cursor_color = palette_color(pal, 15, "%02x%02x%02x");
+        const char *border_color = palette_color(pal, 15, "%02x%02x%02x");
 
-    /*
-     * Only write to stdout if it's a terminal,
-     * to not conflict with other programs like jq
-     */
-    if (isatty(STDOUT_FILENO))
-    {
-        fwrite(buffer, 1, offset, stdout);
-    }
+        fg_color = fg_color ? fg_color : "FFFFFF";             /* Default to white */
+        bg_color = bg_color ? bg_color : "000000";             /* Default to black */
+        cursor_color = cursor_color ? cursor_color : "FFFFFF"; /* Default to white */
+        border_color = border_color ? border_color : "000000"; /* Default to black */
 
-    log_c("Set colors to [%d] terminals!", succ+1);
+        offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_s, 10, fg_color);
+        offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_s, 11, bg_color);
+        offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_s, 12, cursor_color);
+        offset += snprintf(buffer + offset, sizeof(buffer) - offset, fmt_s, 708, border_color);
+
+        /* Broadcast the sequences to all terminal devices */
+        glob_t globbuf;
+        if (glob("/dev/pts/*", GLOB_NOSORT, NULL, &globbuf) == 0)
+        {
+            for (size_t i = 0; i < globbuf.gl_pathc; i++)
+            {
+                FILE *f = fopen(globbuf.gl_pathv[i], "w");
+                if (f)
+                {
+                    fwrite(buffer, 1, offset, f);
+                    fclose(f);
+                    succ++;
+                }
+            }
+            globfree(&globbuf);
+        }
+
+        /*
+         * Only write to stdout if it's a terminal,
+         * to not conflict with other programs like jq
+         */
+        if (isatty(STDOUT_FILENO))
+        {
+            fwrite(buffer, 1, offset, stdout);
+            succ++;
+        }
+
+    }
+    log_c("Set colors to [%d] terminals!", succ);
 }
 
 /* cache wallpaper color palette */
