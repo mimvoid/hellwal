@@ -77,13 +77,21 @@ color15butRGB='%%color15.rgb%%'
 You can get any generated color between 0-15 values.
 By writing '.' after keyword you can specify type: hex or rgb. If you havent specify this output of template will be in hex.
 
-
 ### Available color template formats:
 
 | Type | Input      | Output  |
 |------|------------|---------|
 | hex  | color0.hex | 000000  |
 | rgb  | color0.rgb | 0, 0, 0 |
+
+### Addtional variables accepted by templates
+
+Alongside with colors you can specify some variables to make them more suitable for your needs.
+For now these variables are available:
+
+| Variable |  Description            | Usage                        |
+|----------|-------------------------|------------------------------|
+| alpha    |  Set transparency value | `%% color1.hex alpha=0.5 %%` |
 
 ## JSON
 
