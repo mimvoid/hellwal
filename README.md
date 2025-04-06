@@ -4,6 +4,18 @@
     <img align="center" src="https://raw.githubusercontent.com/danihek/trashcan/refs/heads/main/hellwal1.0.3.gif" alt="Preview" width="500">
 </p>
 
+### Star History
+
+<details>
+  <summary>Click to expand star history</summary>
+    <p align="right">
+      <img
+        alt="Star History Chart"
+        src="https://api.star-history.com/svg?repos=danihek/hellwal&type=Date&theme=dark"
+      >
+    </p>
+</details>
+
 ## Installation
 
 1. To install from **AUR**, run:
@@ -227,22 +239,6 @@ sh ~/.cache/hellwal/terminal.sh
 source ~/.cache/hellwal/variablesfish.fish
 fish ~/.cache/hellwal/terminal.sh
 ```
-
-### TODO
-
-- [ ] TODO: support for other OS's like Mac or Win                        
-- ------------------------------------------------------------------------
-- [x] TODO: tweaking options for generated colors (func + dark-light mode 
-- [x] TODO: bright & dark offset value as cmd line argument               
-- [x] TODO: support for already built themes (like gruvbox etc.)          
-- [x] TODO: do more pleasant color schemes                                
-- [x] TODO: better light theme                                            
-- [x] TODO: print proper program usage                                    
-- [x] TODO: -r for random                                                 
-- [x] TODO: -s for scripts                                                
-- [x] TODO: gen. colors                                                   
-- [x] TODO: templating                                                    
-- [x] TODO: parsing                                                       
 
 # Showcase
 ![showcase2](https://github.com/user-attachments/assets/ddf2a55e-0fbb-4661-827a-6b124f1dacdb)
