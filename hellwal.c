@@ -730,10 +730,9 @@ void print_color(RGB col)
     if (QUIET_ARG != NULL)
         return;
 
-    char *color_block = " ";                  // color_block is 2 spaces wide
-                                              // color_block + ↓↓↓↓↓↓
+    char *color_block = "   ";                  // color_block is 3 spaces wide
+                                                // color_block + ↓↓↓↓↓↓
     /* Write color from as colored block */
-    fprintf(stdout, "\x1b[48;2;%d;%d;%dm%s\033[0m", col.R, col.G, col.B, color_block);
     fprintf(stdout, "\x1b[48;2;%d;%d;%dm%s\033[0m", col.R, col.G, col.B, color_block);
 }
 
