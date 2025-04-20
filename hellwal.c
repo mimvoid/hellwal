@@ -15,6 +15,8 @@
  *  [x] TODO: parsing                                                       
  *
  * changelog v1.0.4:
+ *  - changed visuals of color blocks - they are 2 spaces wide, it's more visible now
+ *  - added --preview and --preview-small cmdline argument
  *  - added alpha variable, you can set alpha by providing it right after keyword in templates (e.g. "%% color1.hex alpha=0.5%%") - requested in issues by @chinh4thepro
  *  - added --skip-term-colors - it skips setting colors(printing escape codes) to the terminals - requested in issues by @SherLock707
  *  - separeted color related functions from hellwal.c into its own header only library
@@ -362,6 +364,10 @@ RGB apply_offsets(RGB c);
 RGB apply_grayscale(RGB c);
 RGB bin_to_color(int r_bin, int g_bin, int b_bin);
 RGB average_color(IMG *img, size_t start, size_t end);
+
+void print_color(RGB c);
+void print_term_colors();
+void print_term_colors_small();
 void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, size_t target_boxes);
 
 /* term, set for all active terminals ANSI escape codes */
@@ -427,6 +433,8 @@ void hellwal_usage(const char *name)
     printf("  -g, --gray-scale         <value>   Apply grayscale filter   (0-1) (float)\n");
     printf("  -n, --dark-offset        <value>   Adjust darkness offset   (0-1) (float)\n");
     printf("  -b, --bright-offset      <value>   Adjust brightness offset (0-1) (float)\n");
+    printf("  --preview                          Preview current terminal colorscheme\n");
+    printf("  --preview-small                    Preview current terminal colorscheme - small factor\n");
     printf("  --debug                            Enable debug mode\n");
     printf("  --no-cache                         Disable caching\n");
     printf("  --skip-term-colors                 Skip setting colors to the terminal\n");
@@ -502,6 +510,16 @@ int set_args(int argc, char *argv[])
         else if (strcmp(argv[i], "--debug") == 0)
         {
             DEBUG_ARG = "";
+        }
+        else if (strcmp(argv[i], "--preview") == 0)
+        {
+            print_term_colors();
+            exit(EXIT_SUCCESS);
+        }
+        else if (strcmp(argv[i], "--preview-small") == 0)
+        {
+            print_term_colors_small();
+            exit(EXIT_SUCCESS);
         }
         else if (strcmp(argv[i], "--no-cache") == 0)
         {
@@ -666,15 +684,57 @@ int set_args(int argc, char *argv[])
     return 0;
 }
 
+// prints current terminal colors
+void print_term_colors()
+{
+    for (int i = 0; i < PALETTE_SIZE; i++)
+    {
+        // set foreground color
+        printf("\033[38;5;%dm", i);
+        printf(" FG %2d ", i);
+
+        // reset and set background color
+        printf("\033[0m");
+        printf("\033[48;5;%dm", i);
+        printf(" BG %2d ", i);
+
+        // reset again
+        printf("\033[0m\n");
+    }
+    printf("\n");
+
+    print_term_colors_small();
+
+    // reset at the end
+    printf("\033[0m\n");
+}
+
+void print_term_colors_small()
+{
+    for (int i=0; i<PALETTE_SIZE; i++)
+    {
+        if (i == PALETTE_SIZE/2)
+            printf("\n");
+
+        //printf("\033[38;5;%dm", i); // if you want to set foreground color
+        printf("\033[48;5;%dm", i);   // if you want to set background color
+        printf("   ");                // two spaces as a "block" of a color
+    }
+    // reset at the end
+    printf("\033[0m\n");
+}
+
 /* Writes color as block to stdout - it does not perform new line by itself */
 void print_color(RGB col)
 {
     if (QUIET_ARG != NULL)
         return;
 
+    char *color_block = " ";                  // color_block is 2 spaces wide
+                                              // color_block + ↓↓↓↓↓↓
     /* Write color from as colored block */
-    fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", col.R, col.G, col.B);
-    fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", col.R, col.G, col.B);
+    fprintf(stdout, "\x1b[48;2;%d;%d;%dm%s\033[0m", col.R, col.G, col.B, color_block);
+    fprintf(stdout, "\x1b[48;2;%d;%d;%dm%s\033[0m", col.R, col.G, col.B, color_block);
 }
 
 /* 
