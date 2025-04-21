@@ -15,7 +15,7 @@
  *  [x] TODO: parsing                                                       
  *
  * changelog v1.0.4:
- *  - changed visuals of color blocks - they are 2 spaces wide, it's more visible now
+ *  - changed visuals of color blocks - they are 3 spaces wide, it's more visible now
  *  - added --preview and --preview-small cmdline argument
  *  - added alpha variable, you can set alpha by providing it right after keyword in templates (e.g. "%% color1.hex alpha=0.5%%") - requested in issues by @chinh4thepro
  *  - added --skip-term-colors - it skips setting colors(printing escape codes) to the terminals - requested in issues by @SherLock707
