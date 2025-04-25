@@ -987,6 +987,7 @@ int _compare_luminance_qsort(const void *a, const void *b)
 /* sort palette by luminance to spread out colors */
 void sort_palette_by_luminance(PALETTE *palette)
 {
+    return;
     qsort(palette->colors, PALETTE_SIZE/2, sizeof(RGB), _compare_luminance_qsort);
 }
 
