@@ -444,6 +444,7 @@ void hellwal_usage(const char *name)
     printf("  --debug                            Enable debug mode\n");
     printf("  --no-cache                         Disable caching\n");
     printf("  --skip-term-colors                 Skip setting colors to the terminal\n");
+    printf("  --skip-luminance-sort              Skip sorting colors before applying\n");
     printf("  --static-background \"#hex\"         Set static background color\n");
     printf("  --static-foreground \"#hex\"         Set static foreground color\n");
     printf("  -h, --help                         Display this help and exit\n\n");
