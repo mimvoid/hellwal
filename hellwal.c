@@ -1,4 +1,4 @@
-/*  hellwal - v1.0.3 - MIT LICENSE
+/*  hellwal - MIT LICENSE
  *
  *  [ ] TODO: support for other OS's like Mac or Win                        
  *  ------------------------------------------------------------------------
@@ -15,6 +15,7 @@
  *  [x] TODO: parsing                                                       
  *
  * changelog v1.0.4:
+ *  - added --version flag
  *  - added --skip-luminance-sort flag, it makes palette more similar to pywal, and less predictable. Some people may want that.
  *  - changed visuals of color blocks - they are 3 spaces wide, it's more visible now
  *  - added --preview and --preview-small cmdline argument
@@ -135,6 +136,12 @@
         x = home_full_path(s); \
     else \
         x = home_full_path(x);
+
+/* if verision is somehow not defined,
+ * set verision to 69 */
+#ifndef VERSION
+#define VERSION "6.9.6"
+#endif
 
 /***
  * STRUCTURES
@@ -475,6 +482,11 @@ int set_args(int argc, char *argv[])
             else {
                 argc = -1;
             }
+        }
+        else if (strcmp(argv[i], "--version") == 0)
+        {
+            printf("%s\n",VERSION);
+            exit(EXIT_SUCCESS);
         }
         else if ((strcmp(argv[i], "--dark") == 0 || strcmp(argv[i], "-d") == 0))
         {

@@ -1,4 +1,4 @@
-VERSION = 1.0.3
+VERSION := $(shell cat VERSION)
 
 CFLAGS = -Wall -Wextra -O3
 LDFLAGS = -lm
@@ -6,10 +6,10 @@ LDFLAGS = -lm
 DESTDIR = /usr/local/bin
 
 hellwal: hellwal.c
-	$(CC) $(CFLAGS) hellwal.c -o hellwal $(LDFLAGS)
+	$(CC) $(CFLAGS) hellwal.c -o hellwal $(LDFLAGS) -DVERSION=\"$(VERSION)\"
 
 debug: hellwal.c
-	$(CC) $(CFLAGS) -ggdb hellwal.c -o hellwal $(LDFLAGS)
+	$(CC) $(CFLAGS) -ggdb hellwal.c -o hellwal $(LDFLAGS) -DVERSION=\"$(VERSION)\"
 
 clean:
 	rm hellwal
