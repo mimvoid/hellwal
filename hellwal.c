@@ -15,6 +15,7 @@
  *  [x] TODO: parsing                                                       
  *
  * changelog v1.0.4:
+ *  - added --skip-luminance-sort flag, it makes palette more similar to pywal, and less predictable. Some people may want that.
  *  - changed visuals of color blocks - they are 3 spaces wide, it's more visible now
  *  - added --preview and --preview-small cmdline argument
  *  - added alpha variable, you can set alpha by providing it right after keyword in templates (e.g. "%% color1.hex alpha=0.5%%") - requested in issues by @chinh4thepro
@@ -203,6 +204,11 @@ char *QUIET_ARG = NULL;
 /* if used, it will skip
  * setting colors to terminals */
 char *SKIP_TERM_COLORS = NULL;
+
+/* if used, colors will not be sorted by luminance,
+ * aka brightness, so colors are harder to control,
+ * but some people may want it */
+char *SKIP_LUMINANCE_SORTING_ARG = NULL;
 
 /* darkmode, lightmode and colormode - darkmode is default */
 char *DARK_ARG  = NULL;
@@ -506,6 +512,10 @@ int set_args(int argc, char *argv[])
         else if (strcmp(argv[i], "--skip-term-colors") == 0)
         {
             SKIP_TERM_COLORS = "";
+        }
+        else if (strcmp(argv[i], "--skip-luminance-sort") == 0)
+        {
+            SKIP_LUMINANCE_SORTING_ARG = "";
         }
         else if (strcmp(argv[i], "--debug") == 0)
         {
@@ -987,7 +997,8 @@ int _compare_luminance_qsort(const void *a, const void *b)
 /* sort palette by luminance to spread out colors */
 void sort_palette_by_luminance(PALETTE *palette)
 {
-    return;
+    if (SKIP_LUMINANCE_SORTING_ARG != NULL) return;
+
     qsort(palette->colors, PALETTE_SIZE/2, sizeof(RGB), _compare_luminance_qsort);
 }
 
@@ -1174,6 +1185,10 @@ PALETTE get_color_palette(PALETTE p)
 
 void apply_addtional_arguments(PALETTE *p)
 {
+    sort_palette_by_luminance(p);
+    for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
+        p->colors[i] = lighten_color(p->colors[i - PALETTE_SIZE / 2], 0.25f);
+
     /* Handle dark/light or color mode */
     if (THEME_ARG == NULL &&
             (LIGHT_ARG == NULL && COLOR_ARG == NULL && DARK_ARG == NULL))
@@ -1395,13 +1410,6 @@ PALETTE gen_palette(IMG *img)
 
     if (DEBUG_ARG != NULL)
         log_c("\n---\n");
-
-    sort_palette_by_luminance(&palette);
-
-    for (int i = PALETTE_SIZE / 2; i < PALETTE_SIZE; i++)
-    {
-        palette.colors[i] = lighten_color(palette.colors[i - PALETTE_SIZE / 2], 0.25f);
-    }
 
     return palette;
 }
