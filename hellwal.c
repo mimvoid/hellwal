@@ -1,19 +1,5 @@
 /*  hellwal - MIT LICENSE
  *
- *  [ ] TODO: support for other OS's like Mac or Win                        
- *  ------------------------------------------------------------------------
- *  [x] TODO: tweaking options for generated colors (func + dark-light mode 
- *  [x] TODO: bright & dark offset value as cmd line argument               
- *  [x] TODO: support for already built themes (like gruvbox etc.)          
- *  [x] TODO: do more pleasant color schemes                                
- *  [x] TODO: better light theme                                            
- *  [x] TODO: print proper program usage                                    
- *  [x] TODO: -r for random                                                 
- *  [x] TODO: -s for scripts                                                
- *  [x] TODO: gen. colors                                                   
- *  [x] TODO: templating                                                    
- *  [x] TODO: parsing                                                       
- *
  * changelog v1.0.4:
  *  - added --version flag
  *  - added --skip-luminance-sort flag, it makes palette more similar to pywal, and less predictable. Some people may want that.
@@ -21,10 +7,15 @@
  *  - added --preview and --preview-small cmdline argument
  *  - added alpha variable, you can set alpha by providing it right after keyword in templates (e.g. "%% color1.hex alpha=0.5%%") - requested in issues by @chinh4thepro
  *  - added --skip-term-colors - it skips setting colors(printing escape codes) to the terminals - requested in issues by @SherLock707
+ *  - added new templates for zathuram mako, dwl and fuzzel thanks to @amolinae06
  *  - separeted color related functions from hellwal.c into its own header only library
  *
+ *   I forgot to acknowledge v1.0.3:
+ *  - thanks for fixing makefile and ivaild free usage: @MalcolmReed-ent
+ *  - thanks for rofi template @Nashluffy
+ *
  * changelog v1.0.3:
- *  - added --json (-j) mode - it prints colors in stdout in json format, REAMDE
+ *  - added --json (-j) mode - it prints colors in stdout in json format, README
  *  - fixed --help, I forgot to add some --cmdline args
  *  - new NEON MODE
  *  - added hellwm template
@@ -449,6 +440,7 @@ void hellwal_usage(const char *name)
     printf("  --preview                          Preview current terminal colorscheme\n");
     printf("  --preview-small                    Preview current terminal colorscheme - small factor\n");
     printf("  --debug                            Enable debug mode\n");
+    printf("  --version                          Print version and exit\n");
     printf("  --no-cache                         Disable caching\n");
     printf("  --skip-term-colors                 Skip setting colors to the terminal\n");
     printf("  --skip-luminance-sort              Skip sorting colors before applying\n");
