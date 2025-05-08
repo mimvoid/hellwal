@@ -1,7 +1,7 @@
 # Hellwal - Fast, Extensible Color Palette Generator
 
 <p align="center">
-    <img align="center" src="https://raw.githubusercontent.com/danihek/trashcan/refs/heads/main/hellwal1.0.3.gif" alt="Preview" width="500">
+    <img align="center" src="https://raw.githubusercontent.com/danihek/trashcan/refs/heads/main/output.gif" alt="Preview" width="500">
 </p>
 
 ### Star History
