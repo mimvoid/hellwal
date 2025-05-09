@@ -1,6 +1,9 @@
 /*  hellwal - MIT LICENSE
  *
  * changelog v1.0.4:
+ *  - Addition to Homebrew thanks to @vaygr https://github.com/Homebrew/homebrew-core/pull/222859
+ *
+ * changelog v1.0.4:
  *  - added --version flag
  *  - added --skip-luminance-sort flag, it makes palette more similar to pywal, and less predictable. Some people may want that.
  *  - changed visuals of color blocks - they are 3 spaces wide, it's more visible now

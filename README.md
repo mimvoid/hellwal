@@ -18,13 +18,19 @@
 
 ## Installation
 
-1. To install from **AUR**, run:
+1. **Archlinux**:
 
 ```sh
 yay -S hellwal
 ```
 
-2. You can also install hellwal from nixpkgs unstable:
+2. **Mac/Linux via Homebrew**:
+
+```sh
+brew install hellwal
+```
+
+3. **NixOS**, nixpkgs **unstable**:
 
 ```nix
 environment.systemPackages = [
