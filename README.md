@@ -40,7 +40,7 @@ environment.systemPackages = [
 
 ## Building
 
-Clone git repo, run make command and you are ready to go! - you just need C compiler and gnumake!
+Clone git repo, run make command and you are ready to go! - you just need a C compiler and gnumake!
 
 ```sh
 git clone https://github.com/danihek/hellwal && cd hellwal && make
@@ -54,18 +54,18 @@ Run this with your wallpaper image:
 hellwal -i [image]
 ```
 
-You can also randomly pick image from given directory like this:
+You can also randomly pick an image from a given directory like this:
 
 ```sh
 hellwal -i <folder> --random
 ```
 
-Generated, templates are saved in ``~/.cache/hellwal/`` directory.
+Generated templates are saved in ``~/.cache/hellwal/``.
 
 ## Templates
-**[INFO]** - if you got hellwal from **AUR**, examples of default templates are stored in `/usr/share/docs/`
+**[INFO]** - if you got hellwal from the **AUR**, examples of default templates are stored in `/usr/share/docs/`.
 
-Look up for templating examples in [templates folder](./templates), they look more-less like this:
+There are also template examples in the [templates folder](./templates). They look more-less like this:
 
 ```sh
 # Main
@@ -79,7 +79,7 @@ wallpaper_path='%%wallpaper%%'
 color0='%%color0.hex%%'
 color1='%%color1.hex%%'
 
-# ... and so on and so fourth.
+# ... and so on and so forth.
 
 color15='%%color15.hex%%'
 
@@ -93,7 +93,7 @@ color15butRGB='%%color15.rgb%%'
 ```
 
 You can get any generated color between 0-15 values.
-By writing '.' after keyword you can specify type: hex or rgb. If you havent specify this output of template will be in hex.
+By writing '.' after keyword you can specify the type: hex or rgb. Otherwise, the template output will be in hex.
 
 ### Available color template formats:
 
@@ -102,9 +102,9 @@ By writing '.' after keyword you can specify type: hex or rgb. If you havent spe
 | hex  | color0.hex | 000000  |
 | rgb  | color0.rgb | 0, 0, 0 |
 
-### Addtional variables accepted by templates
+### Additional variables accepted by templates
 
-Alongside with colors you can specify some variables to make them more suitable for your needs.
+Alongside colors, you can specify some variables to make them more suitable for your needs.
 For now these variables are available:
 
 | Variable |  Description            | Usage                        |
@@ -113,7 +113,7 @@ For now these variables are available:
 
 ## JSON
 
-You can use ``--json``argument to suppress any other output and write colors to ``stdout`` in json format. It's easy to do something with it with ``jq`` later. For example:
+You can use the ``--json`` argument to suppress any other output and write colors to ``stdout`` in json format. It's easy to do something with it with ``jq`` later. For example:
 
 ```sh
 hellwal -i [wallpaper] --json | jq '.'
@@ -121,9 +121,9 @@ hellwal -i [wallpaper] --json | jq '.'
 
 ## Themes
 
-You can set your own theme, re-run it anytime and apply to your config or other programs!
-It can be previously generated palette from image, gruvbox, tokyonight or anything you want!
-For example gruvbox theme:
+You can set your own theme, re-run it anytime and apply it to your config or other programs!
+It can be a previously generated palette from an image, gruvbox, tokyonight or anything you want!
+For example, gruvbox theme:
 
 ```sh
 %% color0  = #282828 %%
@@ -144,13 +144,13 @@ For example gruvbox theme:
 %% color15 = #ebdbb2 %%
 ```
 
-Save text above as file or take from this repo [gruvbox](./themes/gruvbox.hellwal) and just run hellwal:
+Save the text above as a file or copy [gruvbox](./themes/gruvbox.hellwal) from this repo and just run hellwal:
 
 ```sh
 hellwal --theme ./themes/gruvbox.hellwal
 ```
 
-I recommend to put all themes to ``~/.config/hellwal/themes folder``, because from there you can just provide theme name, and it will pick it up automatically, without specifying path. Of course if you want, you can also set different theme-folder path. For example:
+I recommend putting all themes in the ``~/.config/hellwal/themes folder``, because from there you can just provide the theme name, and it will pick it up automatically, without specifying path. Of course if you want, you can also set a different theme-folder path. For example:
 
 ```sh
 hellwal -t gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/themes
@@ -158,7 +158,7 @@ hellwal -t gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/themes
 
 ## NEON Mode
 
-Neon mode boosts colors to make them look more neon-like, sometimes it's pain in the EYE, but usually it looks better. Turned **off** by default.
+Neon mode boosts colors to make them look more neon-like, sometimes it's a pain in the EYE, but usually it looks better. Turned **off** by default.
 
 ```sh
 hellwal -i [wallpaper] --neon-mode
@@ -166,7 +166,7 @@ hellwal -i [wallpaper] --neon-mode
 
 ## Modes
 
-You can select ``-d`` and ``--dark`` or ``-l`` and ``--light`` mode on every given image, theme etc, no matter if it's generated from image or from theme file. Also there is ``--color`` mode.
+You can select ``-d`` and ``--dark`` or ``-l`` and ``--light`` mode on any given image, theme, etc., no matter if it's generated from an image or from a theme file. There is also ``--color`` mode.
 
 ### Dark mode (on by default)
 
@@ -194,9 +194,9 @@ hellwal -i [wallpaper] --color --light --dark
 
 ---
 
-Also you have couple of cool arguments to manipulate how colors will be computed:
+Also, you have a couple of cool arguments to manipulate how colors will be computed:
 
-- you can make all colors in palette darker by specifying ``--dark-offset`` from 0-1:
+- you can make all colors in the palette darker by specifying ``--dark-offset`` from 0-1:
 
 ```sh
 hellwal -i [wallpaper] --light --dark-offset 0.5
@@ -214,7 +214,7 @@ hellwal -i [wallpaper] --bright-offset 0.5
 hellwal -i [wallpaper] --light --invert
 ```
 
-- specify gray scale, if you want monochromatic colors ``--gray-scale``:
+- specify gray scale, if you want monochromatic colors, with ``--gray-scale``:
 
 ```sh
 hellwal -i [wallpaper] --color --gray-scale 0.8
@@ -222,24 +222,24 @@ hellwal -i [wallpaper] --color --gray-scale 0.8
 
 ## Scripts
 
-With ``--script`` or ``-s`` you can run script(or any shell command) after hellwal.
-**Note**: it will only run if hellwal will not encounter any errors.
+With ``--script`` or ``-s`` you can run a script (or any shell command) after hellwal.
+**Note**: it will only run if hellwal does not encounter any errors.
 
 ### On a side note:
 
-If you want your new terminals to open with previusly generated or specified color palette, add this templates to your ``~/.config/hellwal/templates/`` folder:
+If you want your new terminals to open with a previously generated or specified color palette, add these templates to your ``~/.config/hellwal/templates/`` folder:
 
 - variables.sh
 - terminal.sh
 
-then in ``.bash.rc`` add following lines:
+Then in ``.bashrc``, add following lines:
 
 ```sh
 source ~/.cache/hellwal/variables.sh
 sh ~/.cache/hellwal/terminal.sh
 ```
 
-### Alternatively if you use fish add these to fish config:
+### Alternatively if you use fish, add these to your fish config:
 
 ```sh
 source ~/.cache/hellwal/variablesfish.fish
