@@ -2090,7 +2090,7 @@ void process_template(TEMPLATE *t, PALETTE pal)
                             remove_whitespaces(right);
 
                             idx = is_color_palette_var(left);
-                            if (idx != -1 && pd->pos + 1 < pd->length)
+                            if (idx != -1 && pd->pos < pd->length)
                             {
                                 /* 
                                  * check if after '.' is rgb, if yes get output as rgb,
