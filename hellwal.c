@@ -184,7 +184,7 @@ typedef struct
 } TEMPLATE;
 
 /* COLOR_TYPES - helps to manage colors within the code */
-enum COLOR_TYPES { HEX_t, RGB_t };
+enum COLOR_TYPES { HEX_t, RGB_t, R_t, G_t, B_t };
 
 /***
  * GLOBAL VARIABLES
@@ -1518,13 +1518,22 @@ char *palette_color(PALETTE pal, unsigned c, enum COLOR_TYPES type)
     char *rgb_fmt = "%d, %d, %d";
     char *buffer = (char*)malloc(64);
 
-    if (type == HEX_t)
-    {
+    switch (type) {
+    case HEX_t:
         sprintf(buffer, hex_fmt, pal.colors[c].R, pal.colors[c].G, pal.colors[c].B);
-    }
-    else
-    {
+        break;
+    case RGB_t:
         sprintf(buffer, rgb_fmt, pal.colors[c].R, pal.colors[c].G, pal.colors[c].B);
+        break;
+    case R_t:
+        sprintf(buffer, "%d", pal.colors[c].R);
+        break;
+    case G_t:
+        sprintf(buffer, "%d", pal.colors[c].G);
+        break;
+    case B_t:
+        sprintf(buffer, "%d", pal.colors[c].B);
+        break;
     }
 
     return buffer;
@@ -1777,13 +1786,11 @@ char *process_addtional_variables(char *color, char *right_token, enum COLOR_TYP
 
 char *process_variable_alpha(char *color, char *value, enum COLOR_TYPES type)
 {
-    float alpha_value = 1.f;
-    char *buffer = NULL;
-
-    if (is_between_01_float(value))
-        alpha_value = strtod(value, NULL);
-    else
+    if ((type != HEX_t && type != RGB_t) || !is_between_01_float(value))
         return color;
+
+    const float alpha_value = strtod(value, NULL);
+    char *buffer = NULL;
 
     if (type == HEX_t)
     {
@@ -1792,7 +1799,7 @@ char *process_variable_alpha(char *color, char *value, enum COLOR_TYPES type)
         int a = (int)(alpha_value * 255);
         sprintf(buffer, "%s%02x", color, a);
     }
-    else // if its not hex we are assuming its rgb
+    else // we can safely assume it's rgb
     {
         buffer = malloc(sizeof(color) + sizeof(",    "));
         sprintf(buffer, "%s, %f", color, alpha_value);
@@ -1886,6 +1893,12 @@ enum COLOR_TYPES parse_color_type(const char *str)
     if (!strcmp(str, "rgb"))
         return RGB_t;
 
+    switch (str[0]) {
+    case 'r': return R_t;
+    case 'g': return G_t;
+    case 'b': return B_t;
+    }
+
     return HEX_t;
 }
 
@@ -1974,7 +1987,7 @@ void process_template(TEMPLATE *t, PALETTE pal)
                     size_t len = 0;
                     char *var_arg = NULL;
                     char *delim_buf = NULL;
-                    enum COLOR_TYPES type = HEX_t; // 0 means hex, 1 means rgb
+                    enum COLOR_TYPES type = HEX_t;
 
                     last_pos = p->pos + 1;
 
@@ -2089,13 +2102,13 @@ void process_template(TEMPLATE *t, PALETTE pal)
                             remove_whitespaces(left);
                             remove_whitespaces(right);
 
+                            /*
+                             * Checks if the color keyword is valid.
+                             * Also checks if there is a color type, and defaults to hex if not.
+                             */
                             idx = is_color_palette_var(left);
                             if (idx != -1 && pd->pos < pd->length)
                             {
-                                /* 
-                                 * check if after '.' is rgb, if yes get output as rgb,
-                                 * if not output will always be hex
-                                 */
                                 type = parse_color_type(right);
                                 var_arg = palette_color(pal, idx, type);
                             }
