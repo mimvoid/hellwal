@@ -1,7 +1,11 @@
 # Hellwal - Fast, Extensible Color Palette Generator
 
 <p align="center">
-    <img align="center" src="https://raw.githubusercontent.com/danihek/trashcan/refs/heads/main/output.gif" alt="Preview" width="500">
+    <img
+      src="https://raw.githubusercontent.com/danihek/trashcan/refs/heads/main/output.gif"
+      alt="Preview"
+      width="500"
+    >
 </p>
 
 ### Star History
@@ -60,9 +64,10 @@ You can also randomly pick an image from a given directory like this:
 hellwal -i <folder> --random
 ```
 
-Generated templates are saved in ``~/.cache/hellwal/``.
+Generated templates are saved in `~/.cache/hellwal/`.
 
 ## Templates
+
 **[INFO]** - if you got hellwal from the **AUR**, examples of default templates are stored in `/usr/share/docs/`.
 
 There are also template examples in the [templates folder](./templates). They look more-less like this:
@@ -93,12 +98,14 @@ color15butRGB='%%color15.rgb%%'
 ```
 
 You can get any generated color between 0-15 values.
-By writing '.' after keyword you can specify the type: hex or rgb. Otherwise, the template output will be in hex.
+
+By writing '.' after keyword you can specify the type: hex or rgb. Otherwise, the template output
+will be in hex.
 
 ### Available color template formats:
 
 | Type | Input      | Output  |
-|------|------------|---------|
+| ---- | ---------- | ------- |
 | hex  | color0.hex | 000000  |
 | rgb  | color0.rgb | 0, 0, 0 |
 
@@ -107,13 +114,13 @@ By writing '.' after keyword you can specify the type: hex or rgb. Otherwise, th
 Alongside colors, you can specify some variables to make them more suitable for your needs.
 For now these variables are available:
 
-| Variable |  Description            | Usage                        |
-|----------|-------------------------|------------------------------|
-| alpha    |  Set transparency value | `%% color1.hex alpha=0.5 %%` |
+| Variable | Description            | Usage                        |
+| -------- | ---------------------- | ---------------------------- |
+| alpha    | Set transparency value | `%% color1.hex alpha=0.5 %%` |
 
 ## JSON
 
-You can use the ``--json`` argument to suppress any other output and write colors to ``stdout`` in json format. It's easy to do something with it with ``jq`` later. For example:
+You can use the `--json` argument to suppress any other output and write colors to `stdout` in json format. It's easy to do something with it with `jq` later. For example:
 
 ```sh
 hellwal -i [wallpaper] --json | jq '.'
@@ -144,13 +151,16 @@ For example, gruvbox theme:
 %% color15 = #ebdbb2 %%
 ```
 
-Save the text above as a file or copy [gruvbox](./themes/gruvbox.hellwal) from this repo and just run hellwal:
+Save the text above as a file or copy [gruvbox](./themes/gruvbox.hellwal) from this repo and
+just run hellwal:
 
 ```sh
 hellwal --theme ./themes/gruvbox.hellwal
 ```
 
-I recommend putting all themes in the ``~/.config/hellwal/themes folder``, because from there you can just provide the theme name, and it will pick it up automatically, without specifying path. Of course if you want, you can also set a different theme-folder path. For example:
+I recommend putting all themes in the `~/.config/hellwal/themes folder`, because from there
+you can just provide the theme name, and it will pick it up automatically, without specifying
+path. Of course if you want, you can also set a different theme-folder path. For example:
 
 ```sh
 hellwal -t gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/themes
@@ -158,7 +168,8 @@ hellwal -t gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/themes
 
 ## NEON Mode
 
-Neon mode boosts colors to make them look more neon-like, sometimes it's a pain in the EYE, but usually it looks better. Turned **off** by default.
+Neon mode boosts colors to make them look more neon-like, sometimes it's a pain in the EYE, but
+usually it looks better. Turned **off** by default.
 
 ```sh
 hellwal -i [wallpaper] --neon-mode
@@ -166,7 +177,8 @@ hellwal -i [wallpaper] --neon-mode
 
 ## Modes
 
-You can select ``-d`` and ``--dark`` or ``-l`` and ``--light`` mode on any given image, theme, etc., no matter if it's generated from an image or from a theme file. There is also ``--color`` mode.
+You can select `-d` and `--dark` or `-l` and `--light` mode on any given image, theme, etc., no
+matter if it's generated from an image or from a theme file. There is also `--color` mode.
 
 ### Dark mode (on by default)
 
@@ -186,7 +198,8 @@ hellwal -i [wallpaper] --light
 hellwal -i [wallpaper] --color
 ```
 
-The best thing about it is that you are able to combine all of them together. Usually it's not a good idea, but sometimes you can achieve some crazy combination of colors!
+The best thing about it is that you are able to combine all of them together. Usually it's
+not a good idea, but sometimes you can achieve some crazy combination of colors!
 
 ```sh
 hellwal -i [wallpaper] --color --light --dark
@@ -196,25 +209,25 @@ hellwal -i [wallpaper] --color --light --dark
 
 Also, you have a couple of cool arguments to manipulate how colors will be computed:
 
-- you can make all colors in the palette darker by specifying ``--dark-offset`` from 0-1:
+- you can make all colors in the palette darker by specifying `--dark-offset` from 0-1:
 
 ```sh
 hellwal -i [wallpaper] --light --dark-offset 0.5
 ```
 
-- same with ``--bright-offset``:
+- same with `--bright-offset`:
 
 ```sh
 hellwal -i [wallpaper] --bright-offset 0.5
 ```
 
-- invert colors  ``--invert``:
+- invert colors `--invert`:
 
 ```sh
 hellwal -i [wallpaper] --light --invert
 ```
 
-- specify gray scale, if you want monochromatic colors, with ``--gray-scale``:
+- specify gray scale, if you want monochromatic colors, with `--gray-scale`:
 
 ```sh
 hellwal -i [wallpaper] --color --gray-scale 0.8
@@ -222,17 +235,19 @@ hellwal -i [wallpaper] --color --gray-scale 0.8
 
 ## Scripts
 
-With ``--script`` or ``-s`` you can run a script (or any shell command) after hellwal.
+With `--script` or `-s` you can run a script (or any shell command) after hellwal.
+
 **Note**: it will only run if hellwal does not encounter any errors.
 
 ### On a side note:
 
-If you want your new terminals to open with a previously generated or specified color palette, add these templates to your ``~/.config/hellwal/templates/`` folder:
+If you want your new terminals to open with a previously generated or specified color palette,
+add these templates to your `~/.config/hellwal/templates/` folder:
 
 - variables.sh
 - terminal.sh
 
-Then in ``.bashrc``, add following lines:
+Then in `.bashrc`, add following lines:
 
 ```sh
 source ~/.cache/hellwal/variables.sh
@@ -247,7 +262,9 @@ fish ~/.cache/hellwal/terminal.sh
 ```
 
 # Showcase
+
 ![showcase2](https://github.com/user-attachments/assets/ddf2a55e-0fbb-4661-827a-6b124f1dacdb)
 
 # Special thanks:
+
 - [dylanaraps](https://github.com/dylanaraps) - for [https://github.com/dylanaraps/pywal](pywal) and other amazing stuff he created.
