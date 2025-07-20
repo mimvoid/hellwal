@@ -67,6 +67,9 @@ HELL_COLORS_DEF float calculate_color_distance(RGB a, RGB b);
 HELL_COLORS_DEF uint8_t clamp_uint8(int value);
 HELL_COLORS_DEF int compare_luminance(RGB a, RGB b);
 
+HELL_COLORS_DEF float calculate_contrast_ratio(RGB a, RGB b);
+HELL_COLORS_DEF uint8_t meets_min_text_contrast(RGB a, RGB b);
+
 HELL_COLORS_DEF HSL rgb_to_hsl(RGB color);
 HELL_COLORS_DEF RGB hsl_to_rgb(HSL hsl);
 HELL_COLORS_DEF RGB clamp_rgb(RGB color);
@@ -112,6 +115,50 @@ HELL_COLORS_DEF int compare_luminance(RGB a, RGB b)
         return 1;
     else
         return 0;
+}
+
+/* Calculates the contrast ratio between two colors.
+ *
+ * See WCAG standards:
+ * - [Technique G18](https://www.w3.org/WAI/WCAG21/Techniques/general/G18)
+ */
+HELL_COLORS_DEF float calculate_contrast_ratio(RGB a, RGB b)
+{
+    const float lum_a = calculate_luminance(a);
+    const float lum_b = calculate_luminance(b);
+
+    if (lum_a == lum_b)
+        return 1.0f; /* No need to do more calculations */
+
+    float lighter;
+    float darker;
+
+    if (lum_a > lum_b)
+    {
+        lighter = lum_a;
+        darker = lum_b;
+    }
+    else
+    {
+        lighter = lum_b;
+        darker = lum_a;
+    }
+
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+/* Check if the contrast ratio between a color and the background satisfies the minimum
+ * contrast standard for meaningful text (such as body text).
+ *
+ * See WCAG standards:
+ * - [1.4.3 Contrast (Minimum)](https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum)
+ *
+ * returns 1 if the contrast ratio is at least 4.5:1
+ * returns 0 if the contrast ratio is less than 4.5:1
+ */
+HELL_COLORS_DEF uint8_t meets_min_text_contrast(RGB a, RGB b)
+{
+    return (calculate_contrast_ratio(a, b) >= 4.5) ? 1 : 0;
 }
 
 /* check Euclidean distance between two colors to ensure diversity */

@@ -238,6 +238,12 @@ hellwal -i [wallpaper] --light --invert
 hellwal -i [wallpaper] --color --gray-scale 0.8
 ```
 
+- ensure colors are readable against the background with `--check-contrast`:
+
+```sh
+hellwal -i [wallpaper] --check-contrast
+```
+
 ## Scripts
 
 With `--script` or `-s` you can run a script (or any shell command) after hellwal.
