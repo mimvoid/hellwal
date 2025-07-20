@@ -270,4 +270,4 @@ fish ~/.cache/hellwal/terminal.sh
 
 # Special thanks:
 
-- [dylanaraps](https://github.com/dylanaraps) - for [https://github.com/dylanaraps/pywal](pywal) and other amazing stuff he created.
+- [dylanaraps](https://github.com/dylanaraps) - for [pywal](https://github.com/dylanaraps/pywal) and other amazing stuff he created.
