@@ -87,8 +87,11 @@ HELL_COLORS_DEF RGB blend_with_brightness(RGB bright_color, RGB mix_color, float
 HELL_COLORS_DEF void print_rgb(RGB col)
 {
     /* Write color from as colored block */
-    fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", col.R, col.G, col.B);
-    fprintf(stdout, "\x1b[48;2;%d;%d;%dm \033[0m", col.R, col.G, col.B);
+    fprintf(stdout,
+            "\x1b[48;2;%d;%d;%dm \033[0m"
+            "\x1b[48;2;%d;%d;%dm \033[0m",
+            col.R, col.G, col.B,
+            col.R, col.G, col.B);
 }
 
 /* calculate how bright is color from RGB

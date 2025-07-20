@@ -424,41 +424,43 @@ int process_theme(char *t, PALETTE *pal);
 /* prints usage to stdout */
 void hellwal_usage(const char *name)
 {
-    printf("Usage:\n");
-    printf("  %s -i <image> [OPTIONS]\n\n", name);
-    printf("Options:\n");
-    printf("  -i, --image <image>                Set image file\n");
-    printf("  -d, --dark                         Set dark mode (default)\n");
-    printf("  -l, --light                        Set light mode\n");
-    printf("  -c, --color                        Enable colorized mode (experimental)\n");
-    printf("  -v, --invert                       Invert colors in the palette\n");
-    printf("  -m, --neon-mode                    Enhance colors for a neon effect\n");
-    printf("  -r, --random                       Pick random image or theme\n");
-    printf("  -q, --quiet                        Suppress output\n");
-    printf("  -j, --json                         Prints colors to stdout in json format, it's skipping templates\n");
-    printf("  -s, --script             <script>  Execute script after running hellwal\n");
-    printf("  -f, --template-folder    <dir>     Set folder containing templates\n");
-    printf("  -o, --output             <dir>     Set output folder for generated templates\n");
-    printf("  -t, --theme              <file>    Set theme file or name\n");
-    printf("  -k, --theme-folder       <dir>     Set folder containing themes\n");
-    printf("  -g, --gray-scale         <value>   Apply grayscale filter   (0-1) (float)\n");
-    printf("  -n, --dark-offset        <value>   Adjust darkness offset   (0-1) (float)\n");
-    printf("  -b, --bright-offset      <value>   Adjust brightness offset (0-1) (float)\n");
-    printf("  --check-contrast                   Ensure colors are readable against the background\n");
-    printf("  --preview                          Preview current terminal colorscheme\n");
-    printf("  --preview-small                    Preview current terminal colorscheme - small factor\n");
-    printf("  --debug                            Enable debug mode\n");
-    printf("  --version                          Print version and exit\n");
-    printf("  --no-cache                         Disable caching\n");
-    printf("  --skip-term-colors                 Skip setting colors to the terminal\n");
-    printf("  --skip-luminance-sort              Skip sorting colors before applying\n");
-    printf("  --static-background \"#hex\"         Set static background color\n");
-    printf("  --static-foreground \"#hex\"         Set static foreground color\n");
-    printf("  -h, --help                         Display this help and exit\n\n");
-    printf("Defaults:\n");
-    printf("  Template folder: ~/.config/hellwal/templates\n");
-    printf("  Theme folder: ~/.config/hellwal/themes\n");
-    printf("  Output folder: ~/.cache/hellwal/\n\n");
+    printf("Usage:\n"
+           "  %s -i <image> [OPTIONS]\n"
+           "\n", name);
+    printf("Options:\n"
+           "  -i, --image <image>                Set image file\n"
+           "  -d, --dark                         Set dark mode (default)\n"
+           "  -l, --light                        Set light mode\n"
+           "  -c, --color                        Enable colorized mode (experimental)\n"
+           "  -v, --invert                       Invert colors in the palette\n"
+           "  -m, --neon-mode                    Enhance colors for a neon effect\n"
+           "  -r, --random                       Pick random image or theme\n"
+           "  -q, --quiet                        Suppress output\n"
+           "  -j, --json                         Prints colors to stdout in json format, it's skipping templates\n"
+           "  -s, --script             <script>  Execute script after running hellwal\n"
+           "  -f, --template-folder    <dir>     Set folder containing templates\n"
+           "  -o, --output             <dir>     Set output folder for generated templates\n"
+           "  -t, --theme              <file>    Set theme file or name\n"
+           "  -k, --theme-folder       <dir>     Set folder containing themes\n"
+           "  -g, --gray-scale         <value>   Apply grayscale filter   (0-1) (float)\n"
+           "  -n, --dark-offset        <value>   Adjust darkness offset   (0-1) (float)\n"
+           "  -b, --bright-offset      <value>   Adjust brightness offset (0-1) (float)\n"
+           "  --check-contrast                   Ensure colors are readable against the background\n"
+           "  --preview                          Preview current terminal colorscheme\n"
+           "  --preview-small                    Preview current terminal colorscheme - small factor\n"
+           "  --debug                            Enable debug mode\n"
+           "  --version                          Print version and exit\n"
+           "  --no-cache                         Disable caching\n"
+           "  --skip-term-colors                 Skip setting colors to the terminal\n"
+           "  --skip-luminance-sort              Skip sorting colors before applying\n"
+           "  --static-background \"#hex\"         Set static background color\n"
+           "  --static-foreground \"#hex\"         Set static foreground color\n"
+           "  -h, --help                         Display this help and exit\n"
+           "\n"
+           "Defaults:\n"
+           "  Template folder: ~/.config/hellwal/templates\n"
+           "  Theme folder: ~/.config/hellwal/themes\n"
+           "  Output folder: ~/.cache/hellwal/\n\n");
 }
 
 /* set given arguments */
@@ -716,17 +718,13 @@ void print_term_colors()
 {
     for (int i = 0; i < PALETTE_SIZE; i++)
     {
-        // set foreground color
-        printf("\033[38;5;%dm", i);
-        printf(" FG %2d ", i);
-
-        // reset and set background color
-        printf("\033[0m");
-        printf("\033[48;5;%dm", i);
-        printf(" BG %2d ", i);
-
-        // reset again
-        printf("\033[0m\n");
+        printf("\033[38;5;%dm" // set foreground color
+               " FG %2d "
+               "\033[0m"       // reset and set background color
+               "\033[48;5;%dm]"
+               " BG %2d "
+               "\033[0m\n",    // reset again
+               i, i, i, i);
     }
     printf("\n");
 
@@ -744,8 +742,9 @@ void print_term_colors_small()
             printf("\n");
 
         //printf("\033[38;5;%dm", i); // if you want to set foreground color
-        printf("\033[48;5;%dm", i);   // if you want to set background color
-        printf("   ");                // two spaces as a "block" of a color
+        printf("\033[48;5;%dm" // if you want to set background color
+               "   ",          // two spaces as a "block" of a color
+               i);
     }
     // reset at the end
     printf("\033[0m\n");
@@ -1439,12 +1438,15 @@ PALETTE gen_palette(IMG *img)
 
         if (DEBUG_ARG != NULL)
         {
-            printf("(%d, %d, %d)", avg_color.R, avg_color.G, avg_color.B);
-            printf(" - ");
-            printf("(%d, %d, %d)", bin_color.R, bin_color.G, bin_color.B);
-            printf(" = ");
-            printf("(%d, %d, %d)", blended_colors.R, blended_colors.G, blended_colors.B);
-            printf("\n");
+            printf("(%d, %d, %d)"
+                   " - "
+                   "(%d, %d, %d)"
+                   " = "
+                   "(%d, %d, %d)"
+                   "\n",
+                   avg_color.R, avg_color.G, avg_color.B,
+                   bin_color.R, bin_color.G, bin_color.B,
+                   blended_colors.R, blended_colors.G, blended_colors.B);
 
             print_color(avg_color);
             printf(" - ");
@@ -1452,8 +1454,9 @@ PALETTE gen_palette(IMG *img)
             printf(" = ");
             print_color(blended_colors);
 
-            printf("\nLUM: %f", calculate_luminance(blended_colors));
-            printf("\n\n");
+            printf("\nLUM: %f"
+                   "\n\n",
+                   calculate_luminance(blended_colors));
         }
 
         palette.colors[num_colors++] = blended_colors;
