@@ -265,6 +265,9 @@ RGB *STATIC_BG_ARG = NULL;
 /* Set Static Foreground colors */
 RGB *STATIC_FG_ARG = NULL;
 
+/* make sure colors contrast well with the background */
+char *CHECK_CONTRAST_ARG = NULL;
+
 /* defines 'grayness' of colorpalette */
 float GRAY_SCALE_ARG = -1;
 
@@ -400,6 +403,7 @@ void palette_handle_light_mode(PALETTE *p);
 void palette_handle_color_mode(PALETTE *p);
 void apply_addtional_arguments(PALETTE *p);
 void sort_palette_by_luminance(PALETTE *palette);
+void check_palette_contrast(PALETTE *palette);
 
 /* templates */
 char *load_file(char *filename);
@@ -440,6 +444,7 @@ void hellwal_usage(const char *name)
     printf("  -g, --gray-scale         <value>   Apply grayscale filter   (0-1) (float)\n");
     printf("  -n, --dark-offset        <value>   Adjust darkness offset   (0-1) (float)\n");
     printf("  -b, --bright-offset      <value>   Adjust brightness offset (0-1) (float)\n");
+    printf("  --check-contrast                   Ensure colors are readable against the background\n");
     printf("  --preview                          Preview current terminal colorscheme\n");
     printf("  --preview-small                    Preview current terminal colorscheme - small factor\n");
     printf("  --debug                            Enable debug mode\n");
@@ -503,6 +508,10 @@ int set_args(int argc, char *argv[])
         else if ((strcmp(argv[i], "--neon-mode") == 0 || strcmp(argv[i], "-m") == 0))
         {
             NEON_MODE_ARG = "";
+        }
+        else if (strcmp(argv[i], "--check-contrast") == 0)
+        {
+            CHECK_CONTRAST_ARG = "";
         }
         else if ((strcmp(argv[i], "--random") == 0 || strcmp(argv[i], "-r") == 0))
         {
@@ -1172,6 +1181,63 @@ void median_cut(RGB *colors, size_t *starts, size_t *ends, size_t *num_boxes, si
     }
 }
 
+/* Compares every color in the palette against the background and checks their
+ * contrast ratio. If it is too low, increases the contrast by lightening or darkening
+ * the colors until the contrast ratio is met.
+ *
+ * Based heavily on wallust's contrast checking implementation.
+ */
+void check_palette_contrast(PALETTE *palette)
+{
+    if (palette == NULL)
+        return;
+
+    RGB *const bg = &palette->colors[0];
+    RGB *const fg = &palette->colors[PALETTE_SIZE - 1];
+
+    uint8_t dark_bg = compare_luminance(*bg, *fg) == 1 ? 0 : 1;
+    uint8_t changed_bg = 0;
+
+    int i = 0;
+
+    /* Ensure contrast between the foreground and background */
+    if (STATIC_BG_ARG == NULL || STATIC_FG_ARG == NULL)
+    {
+        while (!meets_min_text_contrast(*fg, *bg) && i < 10)
+        {
+            if (STATIC_BG_ARG == NULL)
+            {
+                *bg = dark_bg ? darken_color(*bg, 0.15) : lighten_color(*bg, 0.15);
+                changed_bg = 1;
+            }
+
+            if (STATIC_FG_ARG == NULL)
+                *fg = dark_bg ? lighten_color(*fg, 0.15) : darken_color(*fg, 0.15);
+
+            i++;
+        }
+    }
+
+    /* Ensure contrast for all other colors */
+    for (int j = 1; j < PALETTE_SIZE - 1; j++)
+    {
+        RGB *const color = &palette->colors[j];
+        i = 0;
+
+        while (!meets_min_text_contrast(*color, *bg) && i < 5)
+        {
+            if (STATIC_BG_ARG == NULL && !changed_bg)
+            {
+                *bg = dark_bg ? darken_color(*bg, 0.15) : lighten_color(*bg, 0.15);
+                changed_bg = 1;
+            }
+
+            *color = dark_bg ? lighten_color(*color, 0.15) : darken_color(*color, 0.15);
+            i++;
+        }
+    }
+}
+
 PALETTE get_color_palette(PALETTE p)
 {
     if (THEME_ARG)
@@ -1233,6 +1299,9 @@ void apply_addtional_arguments(PALETTE *p)
         p->colors[0] = *STATIC_BG_ARG;
     if (STATIC_FG_ARG != NULL)
         p->colors[PALETTE_SIZE-1] = *STATIC_FG_ARG;
+
+    if (CHECK_CONTRAST_ARG != NULL)
+        check_palette_contrast(p);
 }
 
 void palette_handle_color_mode(PALETTE *p)
