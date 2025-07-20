@@ -1061,24 +1061,20 @@ RGB average_color(IMG *img, size_t start, size_t end)
     }
 
     return clamp_rgb(
-    (RGB)
-    {
-        .R = (int)(sum_r / count),
-        .G = (int)(sum_g / count),
-        .B = (int)(sum_b / count)
-    });
+        sum_r / count,
+        sum_g / count,
+        sum_b / count
+    );
 }
 
 /* convert bin indices to an rgb color */
 RGB bin_to_color(int r_bin, int g_bin, int b_bin)
 {
     return clamp_rgb(
-    (RGB)
-    {
-        .R = r_bin * (256 / BINS),
-        .G = g_bin * (256 / BINS),
-        .B = b_bin * (256 / BINS)
-    });
+        r_bin * (256 / BINS),
+        g_bin * (256 / BINS),
+        b_bin * (256 / BINS)
+    );
 }
 
 void invert_palette(PALETTE *p)

@@ -69,7 +69,7 @@ HELL_COLORS_DEF int compare_luminance(RGB a, RGB b);
 
 HELL_COLORS_DEF HSL rgb_to_hsl(RGB color);
 HELL_COLORS_DEF RGB hsl_to_rgb(HSL hsl);
-HELL_COLORS_DEF RGB clamp_rgb(RGB color);
+HELL_COLORS_DEF RGB clamp_rgb(int r, int g, int b);
 HELL_COLORS_DEF RGB darken_color(RGB color, float factor);
 HELL_COLORS_DEF RGB lighten_color(RGB color, float factor);
 HELL_COLORS_DEF RGB saturate_color(RGB color, float factor);
@@ -197,12 +197,11 @@ HELL_COLORS_DEF RGB hsl_to_rgb(HSL hsl)
         r = C, g = 0, b = X;
     }
 
-    RGB rgb;
-    rgb.R = (uint8_t)((r + m) * 255);
-    rgb.G = (uint8_t)((g + m) * 255);
-    rgb.B = (uint8_t)((b + m) * 255);
-
-    return rgb;
+    return clamp_rgb(
+        (r + m) * 255,
+        (g + m) * 255,
+        (b + m) * 255
+    );
 }
 
 /* avoid exceeding max value */
@@ -213,25 +212,24 @@ HELL_COLORS_DEF uint8_t clamp_uint8(int value)
     return (uint8_t)value;
 }
 
-/* avoid exceeding max value for each */
-HELL_COLORS_DEF RGB clamp_rgb(RGB color)
+/* Clamps and converts the given values to uint8_t before creating the RGB color. */
+HELL_COLORS_DEF RGB clamp_rgb(int r, int g, int b)
 {
-    return (RGB)
-    {
-        .R = clamp_uint8(color.R),
-        .G = clamp_uint8(color.G),
-        .B = clamp_uint8(color.B)
+    return (RGB){
+        .R = clamp_uint8(r),
+        .G = clamp_uint8(g),
+        .B = clamp_uint8(b)
     };
 }
 
 /* adjust luminance of a color */
 HELL_COLORS_DEF RGB adjust_luminance(RGB color, float factor)
 {
-    return (RGB){
-        .R = (uint8_t)fminf(color.R * factor, 255),
-        .G = (uint8_t)fminf(color.G * factor, 255),
-        .B = (uint8_t)fminf(color.B * factor, 255)
-    };
+    return clamp_rgb(
+        fminf(color.R * factor, 255.0f),
+        fminf(color.G * factor, 255.0f),
+        fminf(color.B * factor, 255.0f)
+    );
 }
 
 /* lighten a color by a factor */
@@ -249,21 +247,22 @@ HELL_COLORS_DEF RGB darken_color(RGB color, float factor)
 /* saturate a color, based on a factor */
 HELL_COLORS_DEF RGB saturate_color(RGB color, float factor)
 {
-    float max_val = fmaxf(color.R, fmaxf(color.G, color.B));
-    color.R = (uint8_t)(color.R + (max_val - color.R) * factor);
-    color.G = (uint8_t)(color.G + (max_val - color.G) * factor);
-    color.B = (uint8_t)(color.B + (max_val - color.B) * factor);
-    return color;
+    const float max_val = fmaxf(color.R, fmaxf(color.G, color.B));
+    return clamp_rgb(
+        color.R + (max_val - color.R) * factor,
+        color.G + (max_val - color.G) * factor,
+        color.B + (max_val - color.B) * factor
+    );
 }
 
 /* blend two colors together based on a blend factor */
 HELL_COLORS_DEF RGB blend_colors(RGB c1, RGB c2, float weight) {
     weight = (weight < 0.0f) ? 0.0f : (weight > 1.0f) ? 1.0f : weight; // Clamp weight
-    return clamp_rgb((RGB){
-        .R = (int)(c1.R * (1 - weight) + c2.R * weight),
-        .G = (int)(c1.G * (1 - weight) + c2.G * weight),
-        .B = (int)(c1.B * (1 - weight) + c2.B * weight)
-    });
+    return clamp_rgb(
+        c1.R * (1 - weight) + c2.R * weight,
+        c1.G * (1 - weight) + c2.G * weight,
+        c1.B * (1 - weight) + c2.B * weight
+    );
 }
 
 /* 
@@ -275,21 +274,23 @@ HELL_COLORS_DEF RGB blend_with_brightness(RGB bright_color, RGB mix_color, float
     if (mix_ratio < 0.0f) mix_ratio = 0.0f;
     if (mix_ratio > 1.0f) mix_ratio = 1.0f;
 
-    RGB blended;
-    blended.R = bright_color.R + mix_ratio * (mix_color.R - bright_color.R);
-    blended.G = bright_color.G + mix_ratio * (mix_color.G - bright_color.G);
-    blended.B = bright_color.B + mix_ratio * (mix_color.B - bright_color.B);
+    const RGB blended = clamp_rgb(
+        bright_color.R + mix_ratio * (mix_color.R - bright_color.R),
+        bright_color.G + mix_ratio * (mix_color.G - bright_color.G),
+        bright_color.B + mix_ratio * (mix_color.B - bright_color.B)
+    );
 
-    uint8_t max_channel = blended.R > blended.G ? 
-                          (blended.R > blended.B ? blended.R : blended.B) : 
-                          (blended.G > blended.B ? blended.G : blended.B);
+    const uint8_t max_channel = blended.R > blended.G
+                                  ? (blended.R > blended.B ? blended.R : blended.B)
+                                  : (blended.G > blended.B ? blended.G : blended.B);
 
-    if (max_channel > 0 && max_channel < 255)
-    {
-        float adjustment = 255.0f / (float)max_channel;
-        blended.R = (uint8_t)(blended.R * adjustment);
-        blended.G = (uint8_t)(blended.G * adjustment);
-        blended.B = (uint8_t)(blended.B * adjustment);
+    if (max_channel > 0 && max_channel < 255) {
+        const float adjustment = 255.0f / (float)max_channel;
+        return clamp_rgb(
+            blended.R * adjustment,
+            blended.G * adjustment,
+            blended.B * adjustment
+        );
     }
 
     return blended;
