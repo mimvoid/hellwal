@@ -409,6 +409,7 @@ void check_palette_contrast(PALETTE *palette);
 char *load_file(char *filename);
 void process_templating(PALETTE pal);
 size_t template_write(TEMPLATE *t, char *dir);
+enum COLOR_TYPES parse_color_type(const char *str);
 void process_template(TEMPLATE *t, PALETTE pal);
 TEMPLATE **get_template_structure_dir(const char *dir_path, size_t *_size);
 
@@ -1880,6 +1881,14 @@ void process_templating(PALETTE pal)
     log_c("Processed [%d/%d] templates!", t_success, templates_count);
 }
 
+enum COLOR_TYPES parse_color_type(const char *str)
+{
+    if (!strcmp(str, "rgb"))
+        return RGB_t;
+
+    return HEX_t;
+}
+
 /* load t->path file to buffer and replaces content between delim with colors from PALETTE colors */
 void process_template(TEMPLATE *t, PALETTE pal)
 {
@@ -2087,33 +2096,18 @@ void process_template(TEMPLATE *t, PALETTE pal)
                                  * check if after '.' is rgb, if yes get output as rgb,
                                  * if not output will always be hex
                                  */
-                                if (!strcmp(right, "rgb"))
-                                {
-                                    var_arg = palette_color(pal, idx, RGB_t);
-                                    type = RGB_t;
-                                }
-                                else
-                                    var_arg = palette_color(pal, idx, HEX_t);
+                                type = parse_color_type(right);
+                                var_arg = palette_color(pal, idx, type);
                             }
                             else if (!strcmp(left, "foreground") || !strcmp(left, "cursor") || !strcmp(left, "border"))
                             {
-                                if (!strcmp(right, "rgb"))
-                                {
-                                    var_arg = palette_color(pal, PALETTE_SIZE - 1, RGB_t);
-                                    type = RGB_t;
-                                }
-                                else
-                                    var_arg = palette_color(pal, PALETTE_SIZE - 1, HEX_t);
+                                type = parse_color_type(right);
+                                var_arg = palette_color(pal, PALETTE_SIZE - 1, type);
                             }
                             else if (!strcmp(left, "background"))
                             {
-                                if (!strcmp(right, "rgb"))
-                                {
-                                    var_arg = palette_color(pal, 0, RGB_t);
-                                    type = RGB_t;
-                                }
-                                else
-                                    var_arg = palette_color(pal, 0, HEX_t);
+                                type = parse_color_type(right);
+                                var_arg = palette_color(pal, 0, type);
                             }
 
                             free(left);
