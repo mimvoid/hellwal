@@ -68,9 +68,10 @@ Generated templates are saved in `~/.cache/hellwal/`.
 
 ## Templates
 
-**[INFO]** - if you got hellwal from the **AUR**, examples of default templates are stored in `/usr/share/docs/`.
+**[INFO]** - if you got hellwal from the **AUR**, examples of default templates can be
+found in `/usr/share/docs/`.
 
-There are also template examples in the [templates folder](./templates). They look more-less like this:
+There are also examples in the [templates folder](./templates). They look more-less like this:
 
 ```sh
 # Main
@@ -97,10 +98,10 @@ color15butRGB='%%color15.rgb%%'
 
 ```
 
-You can get any generated color between 0-15 values.
+You can get any generated color for values 0 to 15.
 
-By writing '.' after keyword you can specify the type: hex or rgb. Otherwise, the template output
-will be in hex.
+After the color keyword, you can specify the format: hex or rgb. By default, the template output
+is in hex.
 
 ### Available color template formats:
 
@@ -120,7 +121,8 @@ For now these variables are available:
 
 ## JSON
 
-You can use the `--json` argument to suppress any other output and write colors to `stdout` in json format. It's easy to do something with it with `jq` later. For example:
+You can use the `--json` argument to suppress any other output and write colors to `stdout` in JSON format.
+You can then manipulate the output with `jq`. For example:
 
 ```sh
 hellwal -i [wallpaper] --json | jq '.'
@@ -158,9 +160,10 @@ just run hellwal:
 hellwal --theme ./themes/gruvbox.hellwal
 ```
 
-I recommend putting all themes in the `~/.config/hellwal/themes folder`, because from there
-you can just provide the theme name, and it will pick it up automatically, without specifying
-path. Of course if you want, you can also set a different theme-folder path. For example:
+I recommend putting all themes in the default theme folder `~/.config/hellwal/themes`.
+This way, you can provide the theme name without specifying the path, and hellwal will pick it
+up automatically. Of course if you want, you can also set a different theme folder.
+For example:
 
 ```sh
 hellwal -t gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/themes
@@ -168,8 +171,8 @@ hellwal -t gruvbox.hellwal --theme-folder ~/dotfiles/configs/hellwal/themes
 
 ## NEON Mode
 
-Neon mode boosts colors to make them look more neon-like, sometimes it's a pain in the EYE, but
-usually it looks better. Turned **off** by default.
+Neon mode boosts colors to make them look more vibrant and bold. Sometimes it's a pain in the EYE,
+but it often looks better. Turned **off** by default.
 
 ```sh
 hellwal -i [wallpaper] --neon-mode
@@ -177,7 +180,7 @@ hellwal -i [wallpaper] --neon-mode
 
 ## Modes
 
-You can select `-d` and `--dark` or `-l` and `--light` mode on any given image, theme, etc., no
+You can select `-d`/`--dark` or `-l`/`--light` mode on any given image, theme, etc., no
 matter if it's generated from an image or from a theme file. There is also `--color` mode.
 
 ### Dark mode (on by default)
@@ -198,8 +201,8 @@ hellwal -i [wallpaper] --light
 hellwal -i [wallpaper] --color
 ```
 
-The best thing about it is that you are able to combine all of them together. Usually it's
-not a good idea, but sometimes you can achieve some crazy combination of colors!
+The best thing about it is that you are able to combine all of these together. Usually it's
+not a good idea, but sometimes you can achieve some crazy color combinations!
 
 ```sh
 hellwal -i [wallpaper] --color --light --dark
@@ -209,25 +212,25 @@ hellwal -i [wallpaper] --color --light --dark
 
 Also, you have a couple of cool arguments to manipulate how colors will be computed:
 
-- you can make all colors in the palette darker by specifying `--dark-offset` from 0-1:
+- you can darken all colors by specifying `--dark-offset` from 0-1 (the higher the value, the darker the colors):
 
 ```sh
 hellwal -i [wallpaper] --light --dark-offset 0.5
 ```
 
-- same with `--bright-offset`:
+- same with `--bright-offset` (the higher the value, the brighter the colors):
 
 ```sh
 hellwal -i [wallpaper] --bright-offset 0.5
 ```
 
-- invert colors `--invert`:
+- invert colors with `--invert`:
 
 ```sh
 hellwal -i [wallpaper] --light --invert
 ```
 
-- specify gray scale, if you want monochromatic colors, with `--gray-scale`:
+- specify grayscale, if you want monochromatic colors, with `--gray-scale`:
 
 ```sh
 hellwal -i [wallpaper] --color --gray-scale 0.8
