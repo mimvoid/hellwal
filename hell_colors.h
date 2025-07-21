@@ -151,8 +151,8 @@ HELL_COLORS_DEF int compare_luminance(RGB a, RGB b)
  */
 HELL_COLORS_DEF float calculate_contrast_ratio(RGB a, RGB b)
 {
-    const float lum_a = calculate_luminance(a);
-    const float lum_b = calculate_luminance(b);
+    const float lum_a = wcag_calculate_luminance(a);
+    const float lum_b = wcag_calculate_luminance(b);
 
     if (lum_a == lum_b)
         return 1.0f; /* No need to do more calculations */
@@ -185,7 +185,7 @@ HELL_COLORS_DEF float calculate_contrast_ratio(RGB a, RGB b)
  */
 HELL_COLORS_DEF uint8_t meets_min_text_contrast(RGB a, RGB b)
 {
-    return (calculate_contrast_ratio(a, b) >= 4.5) ? 1 : 0;
+    return calculate_contrast_ratio(a, b) >= 4.5;
 }
 
 /* check Euclidean distance between two colors to ensure diversity */
